@@ -869,7 +869,10 @@ NET.ready=(async()=>{ try{
       else { NET.sb=sb; NET.uid=session.user.id; }
     }
   }
-}catch(e){ NET.err='Could not reach Supabase: '+(e&&e.message||e); console.warn('Online play unavailable',e); } })().then(()=>syncName());
+}catch(e){ NET.err='Could not reach Supabase: '+(e&&e.message||e); console.warn('Online play unavailable',e); } })();
+// never let a stalled network call leave the game "connecting" forever
+NET.ready=Promise.race([NET.ready,new Promise(r=>setTimeout(()=>{ if(!NET.sb&&!NET.db&&!NET.err&&ONLINE_OUTSIDE) NET.err='Timed out reaching Supabase. Check your connection and reload.'; r(); },15000))]);
+NET.ready.then(()=>syncName());
 async function loadFriends(ev){
   S.friends=[]; await NET.ready;
   if(NET.sb){ try{
