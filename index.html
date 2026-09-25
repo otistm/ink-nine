@@ -849,7 +849,7 @@ const toParStr=n=>n===0?'E':n>0?`+${n}`:String(n);
    rounds/<id>             : { events: { <eventId>: {tot, tp, at} } }   (index, tiny)
    rounds/<id>/events/<ev> : { tot, tp, holes:[{s, tw, shots:[{p:[x,y,z,...], e}]}] }
    ============================================================ */
-const NET={db:null,user:null,uid:null,sb:null,ready:null,err:''};
+const NET={db:null,user:null,uid:null,sb:null,ready:null,err:'',save:'',load:''};
 const IN_CLAUDE=!!(window.claude&&window.claude.use);
 const ONLINE_OUTSIDE=!IN_CLAUDE&&!!(SUPABASE_URL&&SUPABASE_ANON_KEY);
 const esc=t=>String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -875,9 +875,10 @@ async function loadFriends(ev){
   if(NET.sb){ try{
       const {data,error}=await NET.sb.from('rounds').select('player_id,name,tot,holes').eq('event',ev.id).eq('grp',meta.grp||'').neq('player_id',NET.uid).order('tot',{ascending:true}).limit(6);
       if(error) throw error;
+      NET.load=`Found ${(data||[]).length} other player${(data||[]).length===1?'':'s'} in ${meta.grp?'group '+meta.grp:'the open group'} for this event.`;
       const out=(data||[]).filter(r=>Array.isArray(r.holes)&&r.holes.length).map(r=>({id:r.player_id,name:String(r.name||'Player').slice(0,16),tot:r.tot,holes:r.holes}));
       if(EV===ev){ S.friends=out; if(!$('card').hidden&&S.state==='card'&&document.querySelector('.board')) document.querySelector('.board').outerHTML=boardHTML(); }
-    }catch(e){ S.friends=[]; } return; }
+    }catch(e){ S.friends=[]; NET.load='Could not load friends: '+(e.message||e.code||e); } return; }
   const db=NET.db; if(!db) return;
   try{
     const snap=await db.collection('rounds').get();
@@ -901,11 +902,14 @@ async function loadMine(ev){
   try{ const {data}=await NET.sb.from('rounds').select('tot,grp,holes').eq('player_id',NET.uid).eq('event',ev.id).maybeSingle();
     if(data) S.myRemote={tot:data.tot,grp:data.grp||'',complete:Array.isArray(data.holes)&&data.holes.length>=9}; }catch(e){}
 }
+function netNote(){ const el=document.getElementById('netnote'); if(el) el.textContent=[NET.save,NET.load].filter(Boolean).join(' '); }
 async function saveProgress(){
-  await NET.ready; if(!NET.sb||!NET.uid) return;
-  const R=S.myRemote; if(R&&R.complete&&R.grp===(meta.grp||'')) return;   // a finished best round stays up until beaten
+  await NET.ready; if(!NET.sb||!NET.uid){ if(ONLINE_OUTSIDE){ NET.save='Not saved online: '+(NET.err||'not connected'); netNote(); } return; }
+  const R=S.myRemote; if(R&&R.complete&&R.grp===(meta.grp||'')){ NET.save=`Your finished best round (${toParStr(R.tot-COURSE_PAR)}) is what friends see until you beat it.`; netNote(); return; }
   const n=S.scores.length, tot=S.scores.reduce((a,b)=>a+b,0), par=HOLES.slice(0,n).reduce((a,h)=>a+h.par,0);
-  try{ await NET.sb.from('rounds').upsert({player_id:NET.uid,event:EV.id,grp:meta.grp||'',name:meta.name||'',tot,tp:tot-par,holes:S.rec.slice(0,n).map(r=>({s:r.s,tw:r.tw,shots:r.shots})),updated_at:new Date().toISOString()},{onConflict:'player_id,event'}); }catch(e){}
+  try{ const {error}=await NET.sb.from('rounds').upsert({player_id:NET.uid,event:EV.id,grp:meta.grp||'',name:meta.name||'',tot,tp:tot-par,holes:S.rec.slice(0,n).map(r=>({s:r.s,tw:r.tw,shots:r.shots})),updated_at:new Date().toISOString()},{onConflict:'player_id,event'});
+    NET.save=error?`Online save failed: ${error.message||error.code}`:`Saved online through hole ${n}.`; }catch(e){ NET.save='Online save failed: '+(e.message||e); }
+  netNote();
 }
 async function saveRound(){
   await NET.ready;
@@ -915,7 +919,7 @@ async function saveRound(){
       const curDone=S.myRemote?S.myRemote.complete:!!cur;
       if(cur&&curDone&&cur.tot<=tot&&(cur.grp||'')===(meta.grp||'')) return false;
       const {error}=await NET.sb.from('rounds').upsert({player_id:NET.uid,event:EV.id,grp:meta.grp||'',name:meta.name||'',tot,tp,holes,updated_at:new Date().toISOString()},{onConflict:'player_id,event'});
-      if(!error) S.myRemote={tot,grp:meta.grp||'',complete:true};
+      NET.save=error?`Online save failed: ${error.message||error.code}`:'Round saved online.'; if(!error) S.myRemote={tot,grp:meta.grp||'',complete:true};
       return !error;
     }catch(e){ return false; } }
   const db=NET.db, uid=NET.uid; if(!db||!uid) return false;
@@ -1048,6 +1052,10 @@ async function refreshNetLine(){
     if(document.getElementById('netline')) el.textContent=others.length?`Online in ${where} with ${others.slice(0,6).join(', ')}${others.length>6?` and ${others.length-6} more`:''}.`:`Online in ${where}. Nobody else has played a hole yet.`;
   }catch(e){ el.textContent='Online play problem: '+(e.message||e.code||'could not read rounds'); el.classList.add('bad'); }
 }
+function netDetails(){
+  const el=document.getElementById('netline'); if(!el) return;
+  el.textContent=`Player ${NET.uid?NET.uid.slice(0,8):'(none)'}, group "${meta.grp||''}". ${NET.err||(NET.sb?'Connected.':'Not connected.')} ${NET.save||''} ${NET.load||''}`.trim();
+}
 function showHome(){
   if(!meta.name){ showName(false); return; }
   S.state='home'; const T=loadJSON('inknine-trophies',{}), B=loadJSON('inknine-bests',{});
@@ -1062,7 +1070,7 @@ function showHome(){
     <p class="netline" id="netline">${ONLINE_OUTSIDE?'Connecting to online play…':''}</p>
     <p class="cab">${count?`${count} of 3 trophies won`:'No trophies yet'}</p>`;
   $('card').hidden=false; $('card').scrollTop=0; $('card').classList.toggle('home',S.state==='home');
-  refreshNetLine();
+  refreshNetLine(); if(document.getElementById('netline')) document.getElementById('netline').addEventListener('click',netDetails);
   $('editName').addEventListener('click',()=>{ sfx('tick'); showName(true); });
   $('toShop').addEventListener('click',()=>{ audioInit(); sfx('tick'); showShop(); });
   [...$('panel').querySelectorAll('.event')].forEach(b=>b.addEventListener('click',()=>{ audioInit(); const k=+b.dataset.k;
@@ -1105,7 +1113,7 @@ function showCard(){
   } else {
     loadFriends(EV);
     const offer=rewardOffer(EV.rewards);
-    $('panel').innerHTML=`<p class="evn">${EV.name}, hole ${done} of 9</p><h2>${L.name}</h2><p>Hole ${done} in ${last}, ${toPar(tot-par)} through ${done}</p>${breakdown(L)}${boardHTML()}`+
+    $('panel').innerHTML=`<p class="evn">${EV.name}, hole ${done} of 9</p><h2>${L.name}</h2><p>Hole ${done} in ${last}, ${toPar(tot-par)} through ${done}</p>${breakdown(L)}${boardHTML()}${ONLINE_OUTSIDE?`<p class="netline" id="netnote">Saving online…</p>`:''}`+
       (offer.length?`<h3>Choose a reward</h3><div class="picks">${offer.map((o,k)=>pickHTML({...o,tag:o.kind==='club'?'New club':o.kind==='curse'?'Curse, with an upside':'Ball upgrade'},k)).join('')}</div>`:`<button class="btn" id="go">Continue</button>`)+table;
     if(offer.length) wirePicks((k,btn)=>{ const o=offer[k]; if(o.kind==='club'){ S.bag.push(o.i); if(!meta.unlocked.includes(o.i)){ meta.unlocked.push(o.i); saveMeta(); } } else S.upg[o.id]=true;
       btn.classList.add('chosen'); blips(3); computeMod(); setTimeout(()=>showTwist(done),380); });
@@ -1126,7 +1134,7 @@ function showTwist(i){
   const h=HOLES[i], opts=twistOptions(i);
   const how=i===0&&EV.id==='meadow'?`<div class="how">Pick a club, then drag back anywhere and let go. Bow your drag sideways to bend the shot. A ring shrinks onto the ball as you hold: let go as it lands for a pure strike. The ball button bottom-left sets where you strike it: low for a high, spinning flop, high for a low running knockdown.</div>`:'';
   const note=EV.double(i)?'This hole stacks two twists.':EV.forced(i)?'This hole forces a twist.':'Pick a twist';
-  $('panel').innerHTML=`<p class="evn">${EV.name}, ${COURSES[EV.course].name}</p><h2>Hole ${i+1}: ${h.name}</h2><p>Par ${h.par}, ${h.len} yards. ${h.tip}</p>${how}<h3>${note}</h3><div class="picks">${opts.map((o,k)=>pickHTML({...o,tag:o.ids.length===0?'Safe':o.ids.length>1?'Double twist':'Twist'},k)).join('')}</div>${kitLine()}`;
+  $('panel').innerHTML=`<p class="evn">${EV.name}, ${COURSES[EV.course].name}</p><h2>Hole ${i+1}: ${h.name}</h2><p>Par ${h.par}, ${h.len} yards. ${h.tip}</p>${how}${ONLINE_OUTSIDE||IN_CLAUDE?`<p class="netline">${(()=>{ const fs=(S.friends||[]).filter(f=>f.holes[i]&&f.holes[i].shots&&f.holes[i].shots.length); return fs.length?`Ghosts on this hole: ${fs.map(f=>`${esc(f.name)} (${f.holes[i].s})`).join(', ')}.`:`No friend has played this hole yet${(S.friends||[]).length?'':' in this event'}.`; })()}</p>`:''}<h3>${note}</h3><div class="picks">${opts.map((o,k)=>pickHTML({...o,tag:o.ids.length===0?'Safe':o.ids.length>1?'Double twist':'Twist'},k)).join('')}</div>${kitLine()}`;
   $('card').hidden=false; $('card').scrollTop=0; $('card').classList.toggle('home',S.state==='home');
   wirePicks((k,btn)=>{ const o=opts[k]; S.twist=o; btn.classList.add('chosen'); sfx('tick');
     if(o.ids.includes('short')){ const pick=shuffle(S.bag.filter(x=>x!==PUTTER)).slice(0,3); S.allowed=[...pick,PUTTER]; } else S.allowed=null;
