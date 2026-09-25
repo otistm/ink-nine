@@ -804,7 +804,7 @@ function setClub(i,user){
   S.club=i; [...clubsEl.children].forEach((b,j)=>{ b.classList.toggle('on',j===i); b.classList.remove('pop'); });
   refreshChips();
   const el=clubsEl.children[i]; void el.offsetWidth; el.classList.add('pop');
-  frameAim(); updHUD();
+  frameAim(); updHUD(); saveRun('aim');
 }
 function lieNow(){ const b=S.ball; return surfaceAt(H(),b.x,b.y); }
 function distToCup(){ const b=S.ball,h=H(); return Math.hypot(h.cup[0]-b.x,h.cup[1]-b.y); }
@@ -1080,7 +1080,43 @@ function showHome(){
     if(b.classList.contains('locked')){ b.classList.remove('nope'); void b.offsetWidth; b.classList.add('nope'); tone(160,.12,'triangle',.1); return; }
     sfx('tick'); startEvent(k); }));
 }
+/* ============================================================
+   SAVE & RESUME — the round in progress lives in localStorage, so a refresh picks up where you were.
+   Snapshots are taken at every safe moment: hole start, after each shot comes to rest, as a swing
+   is struck (so refreshing mid-flight still counts the stroke), on holing out, and on every card.
+   ============================================================ */
+const RUN_KEY='inknine-run';
+function saveRun(phase,extra){
+  if(!EV) return; const b=S.ball;
+  const snap={v:1,ev:EVENTS.indexOf(EV),phase,hole:S.hole,scores:S.scores,holeLog:S.holeLog,points:S.points,holePts:S.holePts,streak:S.streak,upg:S.upg,bag:S.bag,club:S.club,
+    twist:S.twist,allowed:S.allowed,field:S.field,rec:S.rec,earned:S.earned||0,prevPos:S.prevPos||null,cloverUsed:S.cloverUsed,wind:S.wind,ball:{x:b.x,y:b.y},strokes:S.strokes,
+    last:S.last,firstShot:S.firstShot,banked:S.banked,at:Date.now(),...(extra||{})};
+  try{ localStorage.setItem(RUN_KEY,JSON.stringify(snap)); }catch(e){}
+}
+function clearRun(){ try{ localStorage.removeItem(RUN_KEY); }catch(e){} }
+function loadRun(){ try{ const r=JSON.parse(localStorage.getItem(RUN_KEY)||'null'); return r&&r.v===1&&EVENTS[r.ev]?r:null; }catch(e){ return null; } }
+function resumeRun(r){
+  try{
+    EV=EVENTS[r.ev]; HOLES=COURSES[EV.course].holes; COURSE_PAR=HOLES.reduce((a,h)=>a+h.par,0);
+    Object.assign(S,{hole:r.hole||0,scores:r.scores||[],holeLog:r.holeLog||[],points:r.points||0,holePts:r.holePts||0,streak:r.streak||0,upg:r.upg||{},bag:r.bag||START_BAG.slice(),
+      club:r.club||0,twist:r.twist||STRAIGHT,allowed:r.allowed||null,field:r.field||RIVALS.map(x=>({...x,scores:[]})),rec:r.rec||[],earned:r.earned||0,prevPos:r.prevPos||null,
+      cloverUsed:!!r.cloverUsed,firstShot:r.firstShot!==false,banked:!!r.banked,strokes:r.strokes||0,last:r.last||{x:0,y:0},friends:[],ghosts:[]});
+    S.disp=S.points+S.holePts; $('pv').textContent=Math.round(S.disp).toLocaleString(); $('hint').style.opacity=S.firstShot?1:0;
+    computeMod(); updPts(); loadFriends(EV); loadMine(EV);
+    if(r.phase==='twist'){ showTwist(r.hole,r.opts); return true; }
+    if(r.phase==='reward'){ showCard(r.offer); return true; }
+    const h=H(), b=S.ball; S.wind=r.wind||{x:0,y:0,mph:0};
+    Object.assign(b,{x:r.ball.x,y:r.ball.y,z:zgAt(h,r.ball.x,r.ball.y),vx:0,vy:0,vz:0,mode:'rest',trail:[],inTree:-1});
+    if(!S.rec[S.hole]) S.rec[S.hole]={s:0,tw:S.twist.name||'',shots:[]};
+    parts.length=0; S.fp=0; S.fpv=0; S.slow=1; $('card').hidden=true; refreshChips();
+    if(r.phase==='holed'){ S.state='card'; finishHole(S.strokes); return true; }
+    S.state='aim'; updHUD(); measureView(); frameAim(); cam.x=camT.x; cam.y=camT.y; cam.z=camT.z; cam.vx=cam.vy=0; updHUD();
+    callout('Welcome back',`Hole ${S.hole+1}, stroke ${S.strokes+1}`);
+    return true;
+  }catch(e){ console.warn('Could not resume',e); clearRun(); return false; }
+}
 function startEvent(k){
+  clearRun();
   S.state='card'; EV=EVENTS[k]; HOLES=COURSES[EV.course].holes; COURSE_PAR=HOLES.reduce((a,h)=>a+h.par,0);
   S.rec=[]; S.friends=[]; loadFriends(EVENTS[k]); loadMine(EVENTS[k]);
   Object.assign(S,{earned:0,hole:0,scores:[],holeLog:[],points:0,holePts:0,streak:0,upg:{},bag:START_BAG.slice(),club:0,firstShot:true,twist:STRAIGHT,allowed:null,banked:false,prevPos:null});
@@ -1089,7 +1125,7 @@ function startEvent(k){
   const b=S.ball, h=HOLES[0]; Object.assign(b,{x:h.tee[0],y:h.tee[1],z:0,mode:'rest',trail:[]}); cam.x=h.tee[0]; cam.y=h.tee[1]-120;
   showTwist(0);
 }
-function showCard(){
+function showCard(offerIn){
   const done=S.scores.length, final=done===9;
   const tot=S.scores.reduce((a,b)=>a+b,0), par=HOLES.slice(0,done).reduce((a,h)=>a+h.par,0);
   const head='<tr><th>Hole</th>'+HOLES.map((_,i)=>`<th${i===done-1?' class="cur"':''}>${i+1}</th>`).join('')+'<th>Tot</th></tr>';
@@ -1098,6 +1134,7 @@ function showCard(){
   const pp='<tr><td>Pts</td>'+HOLES.map((h,i)=>`<td class="pp">${S.holeLog[i]?fmtK(S.holeLog[i].total):''}</td>`).join('')+`<td class="pp">${fmtK(S.points)}</td></tr>`;
   const table=`<table class="sc">${head}${pr}${yr}${pp}</table>`, last=S.scores[done-1], L=S.holeLog[done-1];
   if(final){
+    clearRun();
     const rows=standings(), place=placeOf(rows), medal=MEDALS[place-1];
     saveRound().then(ok=>{ const el=document.getElementById('savedNote'); if(el&&ok) el.textContent='Your best round is saved. Friends will see your ghost on every hole.'; });
     const T=loadJSON('inknine-trophies',{}), B=loadJSON('inknine-bests',{}), rank=m=>m?3-MEDALS.indexOf(m):0;
@@ -1115,7 +1152,7 @@ function showCard(){
     $('again').addEventListener('click',()=>{ sfx('tick'); startEvent(EVENTS.indexOf(EV)); });
   } else {
     loadFriends(EV);
-    const offer=rewardOffer(EV.rewards);
+    const offer=offerIn||rewardOffer(EV.rewards); saveRun('reward',{offer});
     $('panel').innerHTML=`<p class="evn">${EV.name}, hole ${done} of 9</p><h2>${L.name}</h2><p>Hole ${done} in ${last}, ${toPar(tot-par)} through ${done}</p>${breakdown(L)}${boardHTML()}${ONLINE_OUTSIDE?`<p class="netline" id="netnote">Saving online…</p>`:''}`+
       (offer.length?`<h3>Choose a reward</h3><div class="picks">${offer.map((o,k)=>pickHTML({...o,tag:o.kind==='club'?'New club':o.kind==='curse'?'Curse, with an upside':'Ball upgrade'},k)).join('')}</div>`:`<button class="btn" id="go">Continue</button>`)+table;
     if(offer.length) wirePicks((k,btn)=>{ const o=offer[k]; if(o.kind==='club'){ S.bag.push(o.i); if(!meta.unlocked.includes(o.i)){ meta.unlocked.push(o.i); saveMeta(); } } else S.upg[o.id]=true;
@@ -1133,8 +1170,8 @@ function twistOptions(i){
   if(EV.forced(i)) return shuffle(pool.slice()).slice(0,3);
   return [STRAIGHT,...shuffle(pool.slice()).slice(0,2)];
 }
-function showTwist(i){
-  const h=HOLES[i], opts=twistOptions(i);
+function showTwist(i,optsIn){
+  const h=HOLES[i], opts=optsIn||twistOptions(i); saveRun('twist',{opts,hole:i});
   const how=i===0&&EV.id==='meadow'?`<div class="how">Pick a club, then drag back anywhere and let go. Bow your drag sideways to bend the shot. A ring shrinks onto the ball as you hold: let go as it lands for a pure strike. The ball button bottom-left sets where you strike it: low for a high, spinning flop, high for a low running knockdown.</div>`:'';
   const note=EV.double(i)?'This hole stacks two twists.':EV.forced(i)?'This hole forces a twist.':'Pick a twist';
   $('panel').innerHTML=`<p class="evn">${EV.name}, ${COURSES[EV.course].name}</p><h2>Hole ${i+1}: ${h.name}</h2><p>Par ${h.par}, ${h.len} yards. ${h.tip}</p>${how}${ONLINE_OUTSIDE||IN_CLAUDE?`<p class="netline">${(()=>{ const fs=(S.friends||[]).filter(f=>f.holes[i]&&f.holes[i].shots&&f.holes[i].shots.length); return fs.length?`Ghosts on this hole: ${fs.map(f=>`${esc(f.name)} (${f.holes[i].s})`).join(', ')}.`:`No friend has played this hole yet${(S.friends||[]).length?'':' in this event'}.`; })()}</p>`:''}<h3>${note}</h3><div class="picks">${opts.map((o,k)=>pickHTML({...o,tag:o.ids.length===0?'Safe':o.ids.length>1?'Double twist':'Twist'},k)).join('')}</div>${kitLine()}`;
@@ -1188,7 +1225,7 @@ function startHole(i){
   S.state='intro';
   $('tn').textContent=`Hole ${i+1}`; $('tname').textContent=h.name; $('ttip').textContent=S.twist.ids.length?`${S.twist.name}. ${S.twist.desc}`:h.tip; $('tp').textContent=`Par ${h.par}`; $('tl').textContent=`${h.len} yards, wind ${mph} mph`;
   const t=$('title'); t.classList.remove('go'); void t.offsetWidth; t.classList.add('go');
-  updHUD();
+  updHUD(); saveRun('aim');
 }
 function endIntro(){ if(S.state!=='intro') return; S.state='aim'; const t=$('title'); t.classList.remove('go'); updHUD(); }
 function toAim(){
@@ -1270,7 +1307,7 @@ function shoot(ang,power,curve=0,quality='good'){
   S.shot={x:b.x,y:b.y,lie,isPutt:!!c.putter,dist0:Math.hypot(H().cup[0]-S.last.x,H().cup[1]-S.last.y),carry:0,treeHit:false,done:false,curve,quality,strike:c.putter?0:S.strike,windMph:S.wind.mph*MOD.wind,land:null,spunBack:false};
   setStrike(0);
   recStart();
-  S.state='flight'; S.restT=0;
+  S.state='flight'; S.restT=0; saveRun('aim');
   if(S.firstShot){ S.firstShot=false; $('hint').style.opacity=0; }
   updHUD();
 }
@@ -1292,7 +1329,7 @@ function penalty(kind){
 function sink(){
   recEnd('in');
   const b=S.ball,h=H(); b.mode='sunk'; S.sinkT=0; S.state='sunk'; S.timer=0; b.sx=b.x; b.sy=b.y;
-  S.fpv=-9; sfx('cup');
+  S.fpv=-9; sfx('cup'); setTimeout(()=>{ if(S.state==='sunk') saveRun('holed'); },0);
   for(let i=0;i<12;i++){ const d=i/12*TAU+Math.random()*.3,s=3+Math.random()*3; parts.push({k:'star',x:h.cup[0],y:h.cup[1],z:.5,vx:Math.cos(d)*s,vy:Math.sin(d)*s,vz:6+Math.random()*5,t:0,life:1.4,rot:Math.random()*TAU}); }
   awardShot('sunk');
   const diff=S.strokes-h.par; callout(scoreName(diff,S.strokes), S.strokes===1?'One swing, one hole':null);
@@ -1345,6 +1382,7 @@ function bankHole(score){
   S.holeLog[S.hole]={shots:S.holePts,mult:m,tw,twName:S.twist.name,name,total};
   S.prevPos=standings().map(r=>r.id); S.field.forEach(r=>{ r.scores[S.hole]=rivalHole(r,h.par,EV.tier); });
   S.points+=total; S.holePts=0; S.earned=(S.earned||0)+total; meta.wallet+=total; saveMeta();
+  saveRun('holed');
   label(h.cup[0],h.cup[1],`${name} ×${fmtMult(m)}`,0,true,30); if(tw>1) label(h.cup[0],h.cup[1],`${S.twist.name} ×${fmtMult(tw)}`,.35,true,64); if(m>1) blips(3);
   updPts();
 }
@@ -1768,7 +1806,7 @@ function frame(now){
     if(S.slow<.8&&S.state==='flight'){ camT.x=(b.x+h.cup[0])/2; camT.y=(b.y+h.cup[1])/2; camT.z=Math.min(30,Math.max(camT.z,cam.z*1.02,12)); } }
   if(S.hitStop>0){ S.hitStop-=dt; }
   else if(S.state==='flight'||S.state==='sunk'){ acc+=dt*TS*S.slow; while(acc>=DT){ physStep(DT); acc-=DT; if(S.state!=='flight') break; } } else acc=0;
-  if(S.state==='flight'&&b.mode==='rest'){ if(S.restT===0){ awardShot('rest'); recEnd('rest'); } S.restT+=dt; if(S.restT>.55){ if(S.strokes>=10||!startGhosts()) toAim(); } }
+  if(S.state==='flight'&&b.mode==='rest'){ if(S.restT===0){ awardShot('rest'); recEnd('rest'); saveRun('aim'); } S.restT+=dt; if(S.restT>.55){ if(S.strokes>=10||!startGhosts()) toAim(); } }
   if(S.state==='ghost'){ S.timer+=dt; if(updateGhosts(dt)){ S.ghostHold=(S.ghostHold||0)+dt; if(S.ghostHold>.7){ S.ghostHold=0; toAim(); } } }
   if(S.state==='water'){ S.timer+=dt; if(S.timer>1.5){ Object.assign(b,{x:S.last.x,y:S.last.y,z:0,vx:0,vy:0,vz:0,mode:'rest',trail:[]}); S.sq=.5; toAim(); } }
   if(S.state==='sunk'){ S.sinkT+=dt; S.timer+=dt; if(S.timer>1.1&&!S.banked) bankHole(S.strokes); if(S.timer>2.6) finishHole(S.strokes); }
@@ -1795,11 +1833,11 @@ function frame(now){
 /* boot */
 addEventListener('resize',()=>{ resize(); if(S.state==='aim') frameAim(); });
 resize();
-EV=EVENTS[0];
+EV=null;
 S.field=RIVALS.map(r=>({...r,scores:[]}));
 computeMod();
 updHUD();
-showHome();
+{ const RUN=meta.name?loadRun():null; if(!(RUN&&resumeRun(RUN))){ EV=EVENTS[0]; showHome(); } }
 requestAnimationFrame(frame);
 })();
 </script>
