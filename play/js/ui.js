@@ -32,11 +32,26 @@ function updHUD(){
   $('hsub').textContent=`${h.name}, par ${h.par}`;
   const d=distToCup(), lie=lieNow();
   $('dist').innerHTML=`Stroke <b>${Math.max(1,S.strokes+(S.state==='aim'?1:0))}</b>, `+(lie==='green'? `${Math.max(1,Math.round(d*3))} ft to the pin` : `${Math.round(d)} yds to the pin`);
-  $('wmph').textContent=`${S.wind.mph} mph`;
+  $('wmph').textContent=`${S.wind.mph} mph`; $('windBtn').setAttribute('aria-label',`Wind ${S.wind.mph} mph. Tap for what it means for this shot.`);
   $('warrow').style.transform=`rotate(${Math.atan2(S.wind.y,S.wind.x)*180/Math.PI+90}deg)`;
   const c=CLUBS[S.club], lf=c.putter?1:lieFactor(c,lie);
   $('shot').innerHTML= S.state==='aim'||S.state==='intro' ? `${c.name} from ${SURF[lie].name} <span>${c.putter?`up to ${Math.round(CS(c).carry)} yds of roll`:Math.round(CS(c).carry*lf*MOD.carry)+' yds carry'+(S.strike?`, ${strikeName(S.strike).toLowerCase()}`:'')}${(()=>{ const n=c.putter?'':lieName(lieSlope(h,S.ball.x,S.ball.y,aimAngle())); return n?`<span>, ${n}</span>`:''; })()}</span>` : '';
 }
+/* ---------- wind: tap the arrow for what it means for this shot ---------- */
+function windInfoHTML(){
+  const w=S.wind, mph=Math.round(w.mph*MOD.wind);
+  if(!w.mph) return `<h3>Calm</h3><p>No wind on this hole. Hit it straight at your target.</p>`;
+  const a=aimAngle(), ux=Math.cos(a), uy=Math.sin(a), wl=Math.hypot(w.x,w.y)||1, along=(w.x*ux+w.y*uy)/wl, side=(ux*w.y-uy*w.x)/wl;
+  const str=mph<4?'A light breeze':mph<10?'A steady wind':mph<16?'A strong wind':'A gale';
+  const dir=[along>.38?'behind you':along<-.38?'into your face':'',Math.abs(side)>.38?(side>0?'left to right':'right to left'):''].filter(Boolean).join(' and ');
+  const tips=[];
+  if(along<-.38) tips.push('Into the wind the ball flies shorter. Take more club.');
+  if(along>.38) tips.push('With the wind behind you the ball flies farther. Take less club.');
+  if(Math.abs(side)>.38) tips.push(`It pushes the ball ${side>0?'right':'left'}, so aim a little ${side>0?'left':'right'}.`);
+  return `<h3>${w.mph} mph</h3><p>${str}, blowing ${dir||'across'} for this shot.</p>${tips.map(t=>`<p>${t}</p>`).join('')}
+    <p class="soft">High shots feel it most. Putts don't feel it at all.${S.twist.ids.includes('gale')?' The Gale twist keeps it blowing hard all hole.':''}${MOD.wind<1?' Your Anchor ball feels only half of it.':''}</p>`;
+}
+function openWind(o){ const b=$('windBox'); if(o){ $('windInfo').innerHTML=windInfoHTML(); if(!$('dial').hidden) openDial(false); } b.hidden=!o; $('windBtn').classList.toggle('on',o); $('windBtn').setAttribute('aria-expanded',String(o)); }
 function callout(big,small){ const el=$('callout'); el.innerHTML=`<b>${big}</b>${small?`<span>${small}</span>`:''}`; el.classList.remove('go'); void el.offsetWidth; el.classList.add('go'); }
 function scoreName(diff,strokes){
   if(strokes===1) return 'Hole in one';

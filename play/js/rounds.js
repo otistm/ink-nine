@@ -52,7 +52,7 @@ function endTutorial(){ TUT.on=false; coachShow(); }
 /* PAUSE — save the round and step out to the clubhouse (where feedback lives), then continue later. */
 function showPause(){
   if(S.state!=='aim'||!EV) return;
-  if(look.on) exitLook(); openDial(false); drag=null;
+  if(look.on) exitLook(); openDial(false); openWind(false); drag=null;
   const tut=EV.id==='tutorial', h=H(); S.state='card'; updHUD(); coachShow();
   $('panel').innerHTML=`<p class="evn">${EV.name}, ${COURSES[EV.course].name}</p><h2>Paused</h2>
     <p>Hole ${S.hole+1}: ${h.name}, stroke ${S.strokes+1}. ${tut?'The tutorial is not saved, so leaving starts it over next time.':'Your round is saved. Pick it up from the clubhouse whenever you like.'}</p>
