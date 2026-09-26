@@ -121,7 +121,7 @@ function drawTrail(){
 function drawAim(t){
   const b=S.ball,h=H(),c=CLUBS[S.club],lie=lieNow(),[bx,by]=WS(b.x,b.y);
   let ang,dist,active=false,curve=0,path=null,stop=null;
-  if(drag){ const d=dragInfo(); ang=d.ang; active=d.l>4;
+  if(drag){ fineCheck(performance.now()); const d=dragInfo(); ang=d.ang; active=d.l>4;
     const LS=lieSlope(h,b.x,b.y,ang);
     dist=d.power*(c.putter?CS(c).carry:CS(c).carry*lieFactor(c,lie)*MOD.carry*slopeCarry(LS.up));
     if(active&&!c.putter&&dist>=3){ curve=dragCurve(); const P=strikeParams(c,S.strike,lie,'pure',LS); const sim=simPath(b.x,b.y,ang,P,solveCached(P.loft,P.spin,dist),curve*SHAPE[c.id]*MOD.bend+slopeCurve(LS.side)); path=sim.pts; stop=predictStop(sim.b); } }
@@ -130,7 +130,7 @@ function drawAim(t){
   const end=path[path.length-1], [sx,sy]=WS(end[0],end[1]);
   ctx.save(); ctx.globalAlpha=active?1:.35; ctx.strokeStyle='#000'; ctx.lineCap='round';
   if(path.length>2){ const ga=ctx.globalAlpha; ctx.globalAlpha=ga*.4; ctx.setLineDash([6,5]); ctx.lineDashOffset=-t*14; ctx.lineWidth=1.4; ctx.beginPath(); path.forEach((p,i)=>{ const [x,y]=WS(p[0],p[1],p[2]||0); i?ctx.lineTo(x,y):ctx.moveTo(x,y); }); ctx.stroke(); ctx.globalAlpha=ga; }
-  ctx.setLineDash([.1,7]); ctx.lineDashOffset=-t*20; ctx.lineWidth=3; ctx.beginPath();
+  if(drag&&drag.fine){ ctx.setLineDash([]); ctx.lineWidth=2.2; } else { ctx.setLineDash([.1,7]); ctx.lineDashOffset=-t*20; ctx.lineWidth=3; } ctx.beginPath();
   path.forEach((p,i)=>{ const [x,y]=WS(p[0],p[1]); i?ctx.lineTo(x,y):ctx.moveTo(x,y); }); ctx.stroke(); ctx.setLineDash([]);
   if(stop&&Math.hypot(stop[0]-end[0],stop[1]-end[1])>.6){ const [qx,qy]=WS(stop[0],stop[1]);
     ctx.setLineDash([5,4]); ctx.lineWidth=1.6; ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(qx,qy); ctx.stroke(); ctx.setLineDash([]);

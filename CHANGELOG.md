@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.20.0
+- Precise aiming: hold your finger still for a moment mid-swing and you get a soft tick and a solid aim line. From then on, small finger movements make small changes (about a third as much), so you can line shots up exactly. Move quickly again to leave precise mode.
+- Slow sideways nudges now only change the aim. They no longer bend the shot by accident. A quick bowed pull still curves it.
+- The small wobble as your finger lifts off the screen is ignored, so the shot goes where you lined it up.
+
 ## 0.19.0
 - Each hole starts with the best club from your bag already picked: the longest one that won't fly well past the pin, skipping any that would land in water or out of bounds. You can still tap another club.
 

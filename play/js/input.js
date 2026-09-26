@@ -4,6 +4,36 @@
    INPUT — drag back anywhere, release to swing
    ============================================================ */
 let drag=null;
+/* Precise aiming. Hold still for a moment mid-drag and the swing drops into a finer gear, so small finger
+   movements make small changes. Slow sideways nudges adjust the aim without bending the shot, and the tiny
+   wobble of a finger lifting off the glass is ignored. Speeds are in pixels per millisecond. */
+const FINE_HOLD=300, FINE_STILL=.08, FINE_EXIT=.45, FINE_GAIN=1/3, AIM_SLOW=.15, LIFT_MS=70, LIFT_MAX=14;
+function fineCheck(now){
+  if(!drag||drag.fine||now-drag.lastActive<FINE_HOLD||Math.hypot(drag.x-drag.x0,drag.y-drag.y0)<24) return;
+  drag.fine=true; tone(1150,.05,'sine',.05);
+}
+function dragMove(e){
+  const now=performance.now(), rdx=e.clientX-drag.fx, rdy=e.clientY-drag.fy, dt=Math.max(1,now-drag.lastT);
+  drag.fx=e.clientX; drag.fy=e.clientY; drag.lastT=now;
+  drag.spd=drag.spd*.6+Math.hypot(rdx,rdy)/dt*.4;
+  fineCheck(now);
+  if(drag.fine&&drag.spd>FINE_EXIT) drag.fine=false;
+  if(drag.spd>=FINE_STILL) drag.lastActive=now;
+  const g=drag.fine?FINE_GAIN:1, dx=rdx*g, dy=rdy*g;
+  if(drag.fine||drag.spd<AIM_SLOW){
+    // aim-only nudge: slide the recorded path along with the end point so its bow (the curve) stays the same
+    const cx=drag.x-drag.x0, cy=drag.y-drag.y0, cl=cx*cx+cy*cy||1;
+    drag.path.forEach(p=>{ const t=Math.max(0,Math.min(1,((p[0]-drag.x0)*cx+(p[1]-drag.y0)*cy)/cl)); p[0]+=dx*t; p[1]+=dy*t; });
+  }
+  drag.x+=dx; drag.y+=dy;
+  if(drag.path.length<240) drag.path.push([drag.x,drag.y]);
+  drag.hist.push([now,drag.x,drag.y]); if(drag.hist.length>16) drag.hist.shift();
+}
+// Where to swing from: if the finger barely moved in the last instant, it was only lifting off, so use where it was just before.
+function liftSettle(){
+  const now=performance.now(); let h=null; for(const k of drag.hist){ if(k[0]<=now-LIFT_MS) h=k; }
+  if(h&&Math.hypot(drag.x-h[1],drag.y-h[2])<LIFT_MAX){ drag.x=h[1]; drag.y=h[2]; }
+}
 const maxDrag=()=>Math.min(W,Hh)*.42;
 function dragInfo(){
   const dx=drag.x0-drag.x, dy=drag.y0-drag.y, l=Math.hypot(dx,dy);
@@ -94,14 +124,16 @@ cv.addEventListener('pointerdown',e=>{
   if(!$('windBox').hidden){ openWind(false); return; }
   if(look.on){ lookDown(e); return; }
   if(S.state!=='aim'||drag) return;
-  drag={x0:e.clientX,y0:e.clientY,x:e.clientX,y:e.clientY,id:e.pointerId,t0:performance.now(),path:[[e.clientX,e.clientY]]};
+  const now=performance.now();
+  drag={x0:e.clientX,y0:e.clientY,x:e.clientX,y:e.clientY,fx:e.clientX,fy:e.clientY,id:e.pointerId,t0:now,path:[[e.clientX,e.clientY]],lastT:now,lastActive:now,spd:0,fine:false,hist:[[now,e.clientX,e.clientY]]};
   try{ cv.setPointerCapture(e.pointerId); }catch(_){}
   camT={x:cam.x,y:cam.y,z:cam.z};
 });
-cv.addEventListener('pointermove',e=>{ if(look.on){ lookMove(e); return; } if(drag&&e.pointerId===drag.id){ drag.x=e.clientX; drag.y=e.clientY; if(drag.path.length<240) drag.path.push([e.clientX,e.clientY]); } });
+cv.addEventListener('pointermove',e=>{ if(look.on){ lookMove(e); return; } if(drag&&e.pointerId===drag.id) dragMove(e); });
 function release(e,cancel){
   if(look.on){ lookUp(e); return; }
   if(!drag||e.pointerId!==drag.id) return;
+  if(!cancel) liftSettle();
   const {power,ang}=dragInfo(), c=CLUBS[S.club], curve=c.putter?0:dragCurve(), q=c.putter?'good':timing().q; drag=null;
   if(!cancel&&power>.04&&S.state==='aim') shoot(ang,power,curve,q); else if(S.state==='aim') frameAim();
 }
