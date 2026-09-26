@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.21.0
+- Shake to cancel: changed your mind mid-swing? Scrub your finger back and forth quickly and the swing is called off. "Shot cancelled" appears by the ball, no stroke counts, and you can lift and drag again. The first Meadowbrook hole card mentions it.
+
 ## 0.20.0
 - Precise aiming: hold your finger still for a moment mid-swing and you get a soft tick and a solid aim line. From then on, small finger movements make small changes (about a third as much), so you can line shots up exactly. Move quickly again to leave precise mode.
 - Slow sideways nudges now only change the aim. They no longer bend the shot by accident. A quick bowed pull still curves it.

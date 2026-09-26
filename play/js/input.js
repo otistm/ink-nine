@@ -12,8 +12,26 @@ function fineCheck(now){
   if(!drag||drag.fine||now-drag.lastActive<FINE_HOLD||Math.hypot(drag.x-drag.x0,drag.y-drag.y0)<24) return;
   drag.fine=true; tone(1150,.05,'sine',.05);
 }
+/* Shake to cancel: scrub the finger back and forth quickly mid-swing and the shot is called off.
+   Counts direction reversals of the real finger; each stroke must be long and quick enough to rule out fine aiming. */
+const SHAKE_REVS=4, SHAKE_WINDOW=700, SHAKE_SEG=14, SHAKE_SPEED=.3;
+function shakeCheck(rdx,rdy,dt,now){
+  const sh=drag.sh, l=Math.hypot(rdx,rdy); if(l<2) return false;
+  if(sh.x*rdx+sh.y*rdy<0){ // finger reversed direction
+    const sl=Math.hypot(sh.x,sh.y); if(sl>=SHAKE_SEG&&sl/Math.max(1,now-sh.t)>=SHAKE_SPEED) sh.revs.push(now);
+    sh.x=rdx; sh.y=rdy; sh.t=now-dt;
+  } else { sh.x+=rdx; sh.y+=rdy; }
+  sh.revs=sh.revs.filter(t=>now-t<=SHAKE_WINDOW);
+  return sh.revs.length>=SHAKE_REVS;
+}
+function cancelShot(){
+  const b=S.ball; drag=null; frameAim();
+  label(b.x,b.y,'Shot cancelled',0,false); tone(520,.14,'triangle',.08,260); S.sq=.35; S.sqv=0;
+  try{ if(navigator.vibrate) navigator.vibrate(30); }catch(_){}
+}
 function dragMove(e){
   const now=performance.now(), rdx=e.clientX-drag.fx, rdy=e.clientY-drag.fy, dt=Math.max(1,now-drag.lastT);
+  if(shakeCheck(rdx,rdy,dt,now)){ cancelShot(); return; }
   drag.fx=e.clientX; drag.fy=e.clientY; drag.lastT=now;
   drag.spd=drag.spd*.6+Math.hypot(rdx,rdy)/dt*.4;
   fineCheck(now);
@@ -125,7 +143,7 @@ cv.addEventListener('pointerdown',e=>{
   if(look.on){ lookDown(e); return; }
   if(S.state!=='aim'||drag) return;
   const now=performance.now();
-  drag={x0:e.clientX,y0:e.clientY,x:e.clientX,y:e.clientY,fx:e.clientX,fy:e.clientY,id:e.pointerId,t0:now,path:[[e.clientX,e.clientY]],lastT:now,lastActive:now,spd:0,fine:false,hist:[[now,e.clientX,e.clientY]]};
+  drag={x0:e.clientX,y0:e.clientY,x:e.clientX,y:e.clientY,fx:e.clientX,fy:e.clientY,id:e.pointerId,t0:now,path:[[e.clientX,e.clientY]],lastT:now,lastActive:now,spd:0,fine:false,hist:[[now,e.clientX,e.clientY]],sh:{x:0,y:0,t:now,revs:[]}};
   try{ cv.setPointerCapture(e.pointerId); }catch(_){}
   camT={x:cam.x,y:cam.y,z:cam.z};
 });
