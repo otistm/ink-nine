@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.19.0
+- Each hole starts with the best club from your bag already picked: the longest one that won't fly well past the pin, skipping any that would land in water or out of bounds. You can still tap another club.
+
 ## 0.18.0
 - The wind arrow moved from the top of the screen to a round button above the ball button, with the speed next to it.
 - Tap it for a box that explains the wind for your shot: how strong it is, whether it is into you, behind you or across, and which way to adjust. Tap the course, the X or the button again to close it.
