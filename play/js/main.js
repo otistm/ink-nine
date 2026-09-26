@@ -5,8 +5,8 @@
    ============================================================ */
 let lastT=performance.now(), acc=0;
 const ease=u=>u<.5?4*u*u*u:1-Math.pow(-2*u+2,3)/2;
-function frame(now){
-  const dt=Math.min(.05,(now-lastT)/1000); lastT=now; S.t+=dt; const t=S.t;
+function tick(now){
+  const dt=Math.max(0,Math.min(.05,(now-lastT)/1000)); lastT=now; S.t+=dt; const t=S.t;
   // physics
   const b=S.ball;
   // slow motion when a ball is tracking into the cup
@@ -39,8 +39,32 @@ function frame(now){
   if(S.state==='flight'&&((t*10)|0)%3===0) updHUD();
   { const tgt=S.points+S.holePts; if(Math.abs(tgt-S.disp)>.5){ S.disp+=(tgt-S.disp)*(1-Math.exp(-dt*5)); if(Math.abs(tgt-S.disp)<1) S.disp=tgt; $('pv').textContent=Math.round(S.disp).toLocaleString(); } }
   draw(t,dt);
-  requestAnimationFrame(frame);
 }
+/* Safety net: an unexpected error must never freeze the game. The next frame is always scheduled,
+   errors are sent as crash notes, and if the same frame keeps failing the ball is put back into play. */
+let badFrames=0;
+function frame(now){
+  requestAnimationFrame(frame);
+  try{ tick(now); badFrames=0; }
+  catch(e){ badFrames++; reportCrash(e,'frame',{badFrames}); if(badFrames>=3){ badFrames=0; unstick(); } }
+}
+function unstick(){
+  try{
+    const b=S.ball, h=H(), ok=v=>typeof v==='number'&&isFinite(v);
+    lastT=performance.now(); acc=0; S.hitStop=0; S.slow=1; S.slowOn=false; parts.length=0; S.ghosts=[];
+    if(look.on){ look.on=false; look.ptrs.clear(); setLookUI(); }
+    if(!ok(b.x)||!ok(b.y)){ const p=ok(S.last.x)&&ok(S.last.y)?S.last:{x:h.tee[0],y:h.tee[1]}; b.x=p.x; b.y=p.y; }
+    if(!ok(cam.x)||!ok(cam.y)||!ok(cam.z)||cam.z<=0){ cam.x=b.x; cam.y=b.y; cam.z=2; cam.vx=cam.vy=0; }
+    if(S.state==='sunk'){ if(!S.banked) bankHole(S.strokes); finishHole(S.strokes); return; }
+    if(S.state==='flight'||S.state==='ghost'||S.state==='water'||S.state==='intro'){
+      Object.assign(b,{z:zgAt(h,b.x,b.y),vx:0,vy:0,vz:0,mode:'rest',trail:[],inTree:-1});
+      if(S.shot&&!S.shot.done) S.shot.done=true;
+      toAim();
+    }
+  }catch(e){ reportCrash(e,'unstick'); }
+}
+addEventListener('error',e=>reportCrash(e.error||e.message,'event',{src:String(e.filename||'').split('/').pop()+':'+e.lineno}));
+addEventListener('unhandledrejection',e=>reportCrash(e.reason,'promise'));
 
 /* boot */
 addEventListener('resize',()=>{ resize(); if(S.state==='aim') frameAim(); });

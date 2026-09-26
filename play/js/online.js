@@ -92,6 +92,23 @@ async function saveRound(){
     return true;
   }catch(e){ return false; }
 }
+/* ---------- crash notes ---------- */
+// Unexpected errors are sent quietly to the feedback table (kind "Crash") so we can see what broke and where.
+// Each distinct error is sent once per session, and at most five per session.
+const CRASH_SENT=new Set();
+function reportCrash(err,where,extra){
+  try{
+    const msg=String(err&&err.message||err||'unknown error').slice(0,300), key=where+':'+msg;
+    console.error('Ink Nine error',where,err);
+    if(CRASH_SENT.has(key)||CRASH_SENT.size>=5) return; CRASH_SENT.add(key);
+    let ctx={}; try{ ctx=feedbackContext(); }catch(_){}
+    const b=S.ball, r=v=>typeof v==='number'?+v.toFixed(2):v;
+    Object.assign(ctx,{where,stack:String(err&&err.stack||'').slice(0,1500),ball:{mode:b.mode,x:r(b.x),y:r(b.y),z:r(b.z),vx:r(b.vx),vy:r(b.vy),vz:r(b.vz)},
+      cam:{x:r(cam.x),y:r(cam.y),z:r(cam.z)},look:look.on,ghosts:(S.ghosts||[]).length,friends:(S.friends||[]).length,tutorial:TUT.on,...(extra||{})});
+    NET.ready.then(()=>{ if(!NET.sb||!NET.uid) return;
+      NET.sb.from('feedback').insert({player_id:NET.uid,name:meta.name||'',version:VERSION,kind:'Crash',note:`${where}: ${msg}`.slice(0,1000),context:ctx}).then(()=>{},()=>{}); });
+  }catch(_){}
+}
 // recording my shots on the current hole
 const REC_EVERY=10; let recTick=0;
 function recStart(){ const r=S.rec[S.hole]; if(!r) return; const b=S.ball; r.shots.push({p:[+b.x.toFixed(1),+b.y.toFixed(1),0],e:''}); recTick=0; }
@@ -101,9 +118,10 @@ function recEnd(kind){ const r=S.rec[S.hole]; if(!r||!r.shots.length) return; co
 /* ---------- ghost replay ---------- */
 const GHOST_SPEED=2.2; // sim-seconds of their shot per real second
 function startGhosts(){
-  const n=(S.rec[S.hole]?.shots.length)||0; S.ghosts=[];
-  (S.friends||[]).forEach(f=>{ const hole=f.holes[S.hole]; if(!hole) return;
-    if(n-1<hole.shots.length){ const sh=hole.shots[n-1]; S.ghosts.push({f,path:sh.p,e:sh.e,t:0,holed:sh.e==='in',s:hole.s,shot:n}); }
+  const n=(S.rec[S.hole]?.shots.length)||0; S.ghosts=[]; if(n<1) return false;
+  (S.friends||[]).forEach(f=>{ const hole=Array.isArray(f.holes)&&f.holes[S.hole]; if(!hole||!Array.isArray(hole.shots)) return;
+    if(n-1<hole.shots.length){ const sh=hole.shots[n-1]; if(!sh||!Array.isArray(sh.p)||sh.p.length<3) return;
+      S.ghosts.push({f,path:sh.p.slice(0,sh.p.length-sh.p.length%3),e:sh.e,t:0,holed:sh.e==='in',s:hole.s,shot:n}); }
     else S.ghosts.push({f,path:[H().cup[0],H().cup[1],0],e:'in',t:1e9,holed:true,s:hole.s,shot:n,done:true}); });
   if(!S.ghosts.length) return false;
   let x0=S.ball.x,x1=x0,y0=S.ball.y,y1=y0; S.ghosts.forEach(g=>{ for(let i=0;i<g.path.length;i+=3){ x0=Math.min(x0,g.path[i]); x1=Math.max(x1,g.path[i]); y0=Math.min(y0,g.path[i+1]); y1=Math.max(y1,g.path[i+1]); } });
