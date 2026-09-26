@@ -12,7 +12,7 @@ function startHole(i){
   const ang=Math.random()*TAU, mph=Math.round(S.twist.ids.includes('gale')?15+Math.random()*10:EV.wind[0]+Math.random()*(EV.wind[1]-EV.wind[0]));
   S.wind={x:Math.cos(ang)*mph*.489,y:Math.sin(ang)*mph*.489,mph};
   parts.length=0; S.fp=0; S.fpv=0;
-  S.holePts=0; S.banked=false; S.cloverUsed=false; S.slow=1; refreshChips();
+  S.holePts=0; S.banked=false; S.cloverUsed=false; S.slow=1; S.club=bestClub(); refreshChips();
   updHUD(); measureView();
   const aim=aimFrame(aimAngle());
   const g0=h.green[0], gz=Math.min(W,Hh-view.top-view.bot)*.5/(g0.rx*2+22);
@@ -32,6 +32,16 @@ function toAim(){
 }
 function aimAngle(){ const b=S.ball,h=H(); return Math.atan2(h.cup[1]-b.y,h.cup[0]-b.x); }
 function reachFor(c,lie){ return c.putter? Math.max(5,Math.min(30,distToCup()*1.25)) : CS(c).carry*lieFactor(c,lie)*MOD.carry; }
+// The club to start a hole with: the longest usable club that won't fly well past the pin,
+// skipping any whose straight shot at the pin would land in water or out of bounds.
+function bestClub(){
+  const b=S.ball, h=H(), d=distToCup(), lie=lieNow(), a=aimAngle();
+  const cands=S.bag.filter(i=>usable(i)&&!CLUBS[i].putter).map(i=>({i,r:reachFor(CLUBS[i],lie)})).sort((x,y)=>y.r-x.r);
+  if(!cands.length) return usable(PUTTER)?PUTTER:S.club;
+  const fit=cands.filter(c=>c.r<=d*1.08), pool=fit.length?fit:[cands[cands.length-1]];
+  const dry=c=>{ const t=Math.min(c.r,d), s=surfaceAt(h,b.x+Math.cos(a)*t,b.y+Math.sin(a)*t); return s!=='water'&&s!=='ob'; };
+  return (pool.find(dry)||pool[0]).i;
+}
 function aimFrame(ang){
   const b=S.ball,h=H(),c=CLUBS[S.club],lie=lieNow(),r=reachFor(c,lie);
   const pts=[[b.x,b.y],[b.x+Math.cos(ang)*r,b.y+Math.sin(ang)*r]];
