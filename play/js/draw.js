@@ -83,9 +83,12 @@ function drawFlag(t){
   const stretch=1+S.fp, ph=Math.max(36,Math.min(72,2.4*cam.z))*stretch, top=cy-ph;
   ctx.strokeStyle='#000'; ctx.lineWidth=2; ctx.lineCap='round';
   ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx,top); ctx.stroke();
-  const dir=S.wind.x>=0?1:-1, fl=ph*.62, fh=ph*.36, amp=2+S.wind.mph*.35, n=6;
+  // the flag streams the way the wind blows; toward or away from you it's foreshortened
+  const wl=Math.hypot(S.wind.x,S.wind.y), ux=wl>.01?S.wind.x/wl:1, uy=wl>.01?S.wind.y/wl*.55:0;
+  const fl=ph*.62, fh=ph*.36, amp=2+S.wind.mph*.35, n=6;
   const topE=[],botE=[];
-  for(let i=0;i<=n;i++){ const u=i/n, w=Math.sin(t*(4+S.wind.mph*.3)-i*.9)*amp*u; topE.push([cx+dir*fl*u*(1-.08*Math.abs(Math.sin(t*3-i))), top+w]); botE.push([cx+dir*fl*u*.96, top+fh*(1-u*.25)+w]); }
+  for(let i=0;i<=n;i++){ const u=i/n, w=Math.sin(t*(4+S.wind.mph*.3)-i*.9)*amp*u, k=fl*u*(1-.08*Math.abs(Math.sin(t*3-i)));
+    topE.push([cx+ux*k, top+uy*k+w]); botE.push([cx+ux*fl*u*.96, top+fh*(1-u*.25)+uy*fl*u*.96+w]); }
   ctx.beginPath(); ctx.moveTo(topE[0][0],topE[0][1]); topE.forEach(p=>ctx.lineTo(p[0],p[1])); for(let i=n;i>=0;i--) ctx.lineTo(botE[i][0],botE[i][1]); ctx.closePath();
   ctx.fillStyle='#fff'; ctx.fill(); ctx.lineWidth=1.8; ctx.stroke();
   ctx.fillStyle='#000'; ctx.font=`800 ${Math.round(fh*.62)}px Fraunces, Georgia, serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
