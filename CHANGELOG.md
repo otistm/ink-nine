@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.22.0
+- Tutorial tips no longer disappear on their own. After the 5-second bar fills, a small X appears in the corner. Tap it to tuck the tip away until you do what it asks, and the next tip appears as before.
+
 ## 0.21.1
 - The wind speed now sits just under the wind button instead of beside it. The wind and pause buttons moved up slightly to make room.
 - The flag on each green now streams the way the wind is blowing, including toward or away from you.

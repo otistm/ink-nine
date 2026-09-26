@@ -23,15 +23,15 @@ const TUT_STEPS=[
  {hole:2,text:'The small dot past the landing ring shows where the ball should stop rolling. Finish the hole.',until:e=>false}
 ];
 const TUT={on:false,i:0,st:{n:0},timed:-1,gone:-1,tm:0};
-const TIP_SECS=5;   // each tip tucks itself away after this long; the next tip appears when you do what it asks
+const TIP_SECS=5;   // after this long a tip offers a close button; once closed, the next tip appears when you do what it asks
 function coachShow(){
   const el=$('coach'); if(!TUT.on){ el.hidden=true; document.querySelectorAll('.coach-hl').forEach(x=>x.classList.remove('coach-hl')); return; }
   const step=TUT_STEPS[TUT.i];
   if(!step||step.hole!==S.hole||TUT.gone===TUT.i){ el.hidden=true; document.querySelectorAll('.coach-hl').forEach(x=>x.classList.remove('coach-hl')); return; }
   el.hidden=!(S.state==='aim'||S.state==='flight'||S.state==='ghost'); el.classList.remove('bye');
   if(!el.hidden&&TUT.timed!==TUT.i){ // first time this tip is on screen: run its timer
-    TUT.timed=TUT.i; clearTimeout(TUT.tm); const bar=$('coachBar'); bar.classList.remove('run'); void bar.offsetWidth; bar.classList.add('run');
-    const i=TUT.i; TUT.tm=setTimeout(()=>{ if(!TUT.on||TUT.i!==i) return; el.classList.add('bye'); TUT.tm=setTimeout(()=>{ if(TUT.i===i){ TUT.gone=i; coachShow(); } },300); },TIP_SECS*1000); }
+    TUT.timed=TUT.i; clearTimeout(TUT.tm); el.classList.remove('done'); $('coachX').tabIndex=-1; const bar=$('coachBar'); bar.classList.remove('run'); void bar.offsetWidth; bar.classList.add('run');
+    const i=TUT.i; TUT.tm=setTimeout(()=>{ if(TUT.on&&TUT.i===i){ el.classList.add('done'); $('coachX').tabIndex=0; } },TIP_SECS*1000); }
   $('coachN').textContent=`Tip ${TUT.i+1} of ${TUT_STEPS.length}`; $('coachT').textContent=step.text;
   document.querySelectorAll('.coach-hl').forEach(x=>x.classList.remove('coach-hl'));
   if(step.target&&!el.hidden){ const t=document.querySelector(step.target); if(t) t.classList.add('coach-hl'); }
@@ -47,6 +47,10 @@ function startTutorial(){
   Object.assign(S,{rec:[],friends:[],earned:0,hole:0,scores:[],holeLog:[],points:0,holePts:0,streak:0,upg:{},bag:[0,1,2,3,4,5,6,7],club:0,firstShot:false,twist:STRAIGHT,allowed:null,banked:false,prevPos:null,field:[]});
   S.disp=0; $('pv').textContent='0'; $('hint').style.opacity=0; computeMod(); updPts();
   TUT.on=true; TUT.i=0; TUT.st={n:0}; TUT.timed=-1; TUT.gone=-1; clearTimeout(TUT.tm); $('card').hidden=true; startHole(0);
+}
+function closeTip(){
+  const el=$('coach'), i=TUT.i; if(!el.classList.contains('done')) return;
+  el.classList.add('bye'); setTimeout(()=>{ if(TUT.i===i){ TUT.gone=i; coachShow(); } },280);
 }
 function endTutorial(){ TUT.on=false; coachShow(); }
 /* PAUSE — save the round and step out to the clubhouse (where feedback lives), then continue later. */
