@@ -34,9 +34,23 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:
 .brk b{font-family:var(--display);font-size:24px;font-weight:900}
 .big{font-family:var(--display);font-weight:900;font-size:44px;line-height:1;margin:4px 0 2px}
 .sc .pp{font-size:10.5px}
-.wind{display:flex;flex-direction:column;align-items:center;min-width:52px}
-.wind svg{width:42px;height:42px;overflow:visible}
 #warrow{transition:transform .6s cubic-bezier(.34,1.56,.64,1)}
+#windWrap{position:fixed;left:19px;bottom:calc(env(safe-area-inset-bottom,0px) + 222px);z-index:7}
+#windBtn{width:44px;height:44px;border-radius:50%;border:2.5px solid var(--ink);background:var(--paper);color:var(--ink);box-shadow:3px 4px 0 var(--ink);display:grid;place-items:center;cursor:pointer;padding:0;
+  transition:transform .28s cubic-bezier(.34,1.56,.64,1)}
+#windBtn svg{width:30px;height:30px;overflow:visible}
+#windBtn.on{background:var(--ink);color:var(--paper)}
+#windBtn:active{transform:scale(1.12,.86)}
+#windBtn:focus-visible{outline:3px solid var(--ink);outline-offset:4px}
+#wmph{position:absolute;left:54px;top:13px;white-space:nowrap;margin:0;pointer-events:none}
+#windBox{position:absolute;left:0;bottom:58px;width:min(292px,calc(100vw - 38px));background:var(--paper);border:2.5px solid var(--ink);border-radius:18px;box-shadow:5px 6px 0 var(--ink);
+  padding:12px 14px 12px;text-align:left;transform-origin:22px 100%;animation:coachPop .45s cubic-bezier(.3,.7,.3,1)}
+#windBox[hidden]{display:none}
+#windBox h3{margin:0 30px 2px 0;font-family:var(--display);font-style:italic;font-weight:900;font-size:24px;line-height:1.05}
+#windBox p{margin:6px 0 0;font-size:13.5px;font-weight:700;line-height:1.35}
+#windBox p.soft{font-size:12px;color:var(--soft)}
+#windBox .wx{position:absolute;top:8px;right:8px;width:30px;height:30px;border:0;background:none;padding:5px;cursor:pointer;color:var(--ink)}
+#windBox .wx:focus-visible{outline:2px solid var(--ink);border-radius:50%}
 
 #bar{position:fixed;left:0;right:0;bottom:0;z-index:5;
   padding:6px 10px calc(env(safe-area-inset-bottom,0px) + 12px);background:linear-gradient(to top,#fff 70%,rgba(255,255,255,0))}

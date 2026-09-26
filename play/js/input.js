@@ -32,8 +32,10 @@ function setStrike(v){
   $('miniDot').setAttribute('cy',String(20-S.strike*11)); $('dname').textContent=strikeName(S.strike);
   $('strike').setAttribute('aria-label',`Strike point: ${strikeName(S.strike)}`); updHUD();
 }
-function openDial(o){ const d=$('dial'); d.hidden=!o; $('strike').classList.toggle('on',o); $('strike').setAttribute('aria-expanded',String(o)); }
-$('strike').addEventListener('click',()=>{ audioInit(); if(look.on) exitLook(); openDial($('dial').hidden); sfx('tick'); });
+function openDial(o){ const d=$('dial'); d.hidden=!o; $('windWrap').style.visibility=o?'hidden':''; $('strike').classList.toggle('on',o); $('strike').setAttribute('aria-expanded',String(o)); }
+$('strike').addEventListener('click',()=>{ audioInit(); if(look.on) exitLook(); openWind(false); openDial($('dial').hidden); sfx('tick'); });
+$('windBtn').addEventListener('click',()=>{ audioInit(); openWind($('windBox').hidden); sfx('tick'); });
+$('windX').addEventListener('click',()=>{ sfx('tick'); openWind(false); });
 { const svg=$('dialSvg'); let on=false, lastQ=null;
   const at=e=>{ const r=svg.getBoundingClientRect(), y=(e.clientY-r.top)/r.height*150; setStrike(Math.max(-1,Math.min(1,(75-y)/50)));
     const q=Math.round(S.strike*4); if(q!==lastQ){ lastQ=q; tone(500+S.strike*200,.03,'sine',.06); } };
@@ -89,6 +91,7 @@ cv.addEventListener('pointerdown',e=>{
   if(S.state==='intro'){ endIntro(); return; }
   if(S.state==='ghost'){ (S.ghosts||[]).forEach(g=>{ g.t=1e9; g.done=true; }); S.ghostHold=0; toAim(); return; }
   if(!$('dial').hidden){ openDial(false); return; }
+  if(!$('windBox').hidden){ openWind(false); return; }
   if(look.on){ lookDown(e); return; }
   if(S.state!=='aim'||drag) return;
   drag={x0:e.clientX,y0:e.clientY,x:e.clientX,y:e.clientY,id:e.pointerId,t0:performance.now(),path:[[e.clientX,e.clientY]]};

@@ -5,6 +5,7 @@
    ============================================================ */
 function startHole(i){
   if(look.on){ look.on=false; look.ptrs.clear(); setLookUI(); }
+  openWind(false);
   S.hole=i; S.strokes=0; const h=H(), b=S.ball;
   Object.assign(b,{x:h.tee[0],y:h.tee[1],z:0,vx:0,vy:0,vz:0,mode:'rest',trail:[],inTree:-1});
   S.rec[i]={s:0,tw:S.twist.name||'',shots:[]}; S.ghosts=[];

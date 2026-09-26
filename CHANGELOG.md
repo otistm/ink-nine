@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.0
+- The wind arrow moved from the top of the screen to a round button above the ball button, with the speed next to it.
+- Tap it for a box that explains the wind for your shot: how strong it is, whether it is into you, behind you or across, and which way to adjust. Tap the course, the X or the button again to close it.
+
 ## 0.17.0
 - Tutorial tips tuck themselves away after 5 seconds, so they no longer cover the course. A thin bar along the bottom of each tip shows the time left. The next tip appears once you do what the current one asks.
 
