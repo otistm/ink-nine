@@ -26,7 +26,7 @@ function setClub(i,user){
 function lieNow(){ const b=S.ball; return surfaceAt(H(),b.x,b.y); }
 function distToCup(){ const b=S.ball,h=H(); return Math.hypot(h.cup[0]-b.x,h.cup[1]-b.y); }
 function updHUD(){
-  $('scope').disabled=S.state!=='aim'||MOD.fog;
+  $('scope').disabled=S.state!=='aim'||MOD.fog; if($('pause')) $('pause').disabled=S.state!=='aim';
   { const off=S.state!=='aim'||CLUBS[S.club].putter; $('strike').disabled=off; if(off&&!$('dial').hidden) openDial(false); }
   const h=H(); $('hn').innerHTML=`Hole ${S.hole+1}`+(S.twist.ids.length?` <span class="tw">${S.twist.name} ×${S.twist.mult}</span>`:'');
   $('hsub').textContent=`${h.name}, par ${h.par}`;

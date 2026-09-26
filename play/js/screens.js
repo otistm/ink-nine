@@ -97,10 +97,11 @@ function showFeedback(back){
 function showHome(){
   if(!meta.name){ showName(false); return; }
   endTutorial(); if(EV&&EV.id==='tutorial') EV=EVENTS[0];
-  S.state='home'; const T=loadJSON('inknine-trophies',{}), B=loadJSON('inknine-bests',{});
+  S.state='home'; const T=loadJSON('inknine-trophies',{}), B=loadJSON('inknine-bests',{}), RUN=loadRun();
   const count=Object.keys(T).length;
   $('panel').innerHTML=`<h2 class="logo">Ink Nine</h2><p>Play golf. Do well. Get trophies.</p>
     <p class="asname">Playing as <b>${esc(meta.name)}</b>${ONLINE_OUTSIDE&&meta.grp?` in <b>${esc(meta.grp)}</b>`:''} <button class="linkbtn" id="editName">${ONLINE_OUTSIDE?'Change name or group':'Change name'}</button></p>
+    ${RUN?`<button class="btn resume" id="contBtn">Continue your round<small>${esc(EVENTS[RUN.ev].name)}, hole ${(RUN.hole||0)+1}${RUN.phase==='aim'?`, stroke ${(RUN.strokes||0)+1}`:''}</small></button><p class="resnote">Starting another invitational replaces this saved round.</p>`:''}
     ${meta.tutDone?'':`<button class="event tut" id="tutBtn" style="animation-delay:.05s"><span class="tw-wrap"><svg width="44" height="44" viewBox="0 0 40 40" aria-hidden="true"><g stroke="#000" stroke-width="2.4" stroke-linecap="round" fill="none"><circle cx="20" cy="22" r="11" fill="#fff"/><path d="M14 17a8 8 0 0 1 6-3"/><path d="M29 6v12"/><path d="M29 6c4-1 6 2 9 1l-1 5c-3 1-5-2-8-1" fill="#000"/></g></svg><small>New here?</small></span><span class="ev"><b>Play the tutorial</b><i>Practice Green, 3 holes</i><span>Learn the swing, clubs, tempo, curve and spin in a few minutes. Earn 1,000 points for the pro shop.</span></span></button>`}
     <div class="events">${EVENTS.map((e,k)=>{ const locked=k>0&&!T[EVENTS[k-1].id], m=T[e.id];
       return `<button class="event${locked?' locked':''}" data-k="${k}" ${locked?'aria-disabled="true"':''} style="animation-delay:${.1+k*.1}s">
@@ -115,6 +116,7 @@ function showHome(){
   refreshNetLine(); if(document.getElementById('netline')) document.getElementById('netline').addEventListener('click',netDetails);
   { const t1=document.getElementById('tutBtn')||document.getElementById('tutAgain'); if(t1) t1.addEventListener('click',()=>{ audioInit(); sfx('tick'); startTutorial(); }); }
   $('fbBtn').addEventListener('click',()=>{ sfx('tick'); showFeedback(showHome); });
+  if(RUN) $('contBtn').addEventListener('click',()=>{ audioInit(); sfx('tick'); if(!resumeRun(RUN)) showHome(); });
   $('editName').addEventListener('click',()=>{ sfx('tick'); showName(true); });
   $('toShop').addEventListener('click',()=>{ audioInit(); sfx('tick'); showShop(); });
   [...$('panel').querySelectorAll('.event:not(.tut)')].forEach(b=>b.addEventListener('click',()=>{ audioInit(); const k=+b.dataset.k;
