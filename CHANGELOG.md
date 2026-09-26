@@ -1,7 +1,7 @@
 # Changelog
 
 ## 0.21.1
-- The wind speed now sits inside the wind button, under the arrow. The wind and pause buttons are a touch bigger to fit it. The arrow inside is bigger too.
+- The wind speed now sits just under the wind button instead of beside it. The wind and pause buttons moved up slightly to make room.
 - The flag on each green now streams the way the wind is blowing, including toward or away from you.
 
 ## 0.21.0
