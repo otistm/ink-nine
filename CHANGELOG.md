@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.17.0
+- Tutorial tips tuck themselves away after 5 seconds, so they no longer cover the course. A thin bar along the bottom of each tip shows the time left. The next tip appears once you do what the current one asks.
+
 ## 0.16.0
 - New pause button above the telescope. It opens a card to keep playing, save and go to the clubhouse, or send feedback.
 - In the clubhouse, a saved round replaces its invitational's description with where you left off (hole, stroke, score and points). Tap the card to pick up exactly there, or use "Start over" below to begin again.
