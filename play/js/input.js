@@ -72,6 +72,7 @@ function timing(){
   const q=(r-RING_IN)<=4.5*MOD.perfect?'pure':ph<.3?'mishit':'good'; return {q,r,ph};
 }
 $('coachSkip').addEventListener('click',()=>{ sfx('tick'); endTutorial(); showHome(); });
+$('coachX').addEventListener('click',()=>{ sfx('tick'); closeTip(); });
 /* ---------- strike dial ---------- */
 S.strike=0;
 function setStrike(v){

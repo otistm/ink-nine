@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.22.0
+- Tutorial tips no longer disappear on their own. After the 5-second bar fills, a small X appears in the corner. Tap it to tuck the tip away until you do what it asks, and the next tip appears as before.
+
 ## 0.21.0
 - Shake to cancel: changed your mind mid-swing? Scrub your finger back and forth quickly and the swing is called off. "Shot cancelled" appears by the ball, no stroke counts, and you can lift and drag again. The first Meadowbrook hole card mentions it.
 
