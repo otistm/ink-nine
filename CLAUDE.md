@@ -38,7 +38,7 @@ Otis is the designer. He doesn't read code. He judges changes by playing them on
 ## Every change
 1. Work on a new branch, never directly on `main`.
 2. Bump `VERSION` in `play/js/config.js` (patch for fixes, minor for features) and add a line to `CHANGELOG.md` in plain language.
-3. Test locally: run `python3 -m http.server` in the repo folder and open http://localhost:8000/play/ at a phone size (390 × 844). Online play only works on https, so it will say it's offline locally; that's expected.
+3. Test locally: run `python3 -m http.server` in the repo folder and open http://localhost:8000/play/ at a phone size (390 × 844). **Local play connects to the real Supabase** (rounds, leaderboard, feedback), so test play would land on testers' leaderboard. Before playing locally, disconnect it in the browser console with `NET.ready.then(()=>{NET.sb=null;NET.uid=null;})`, or play in a private group code.
 4. Push the branch and share the Vercel preview link with Otis. Merge to `main` only when he's happy.
 
 ## Protect testers' saved progress

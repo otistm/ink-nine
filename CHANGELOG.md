@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.15.1
+- The game no longer freezes with the ball stuck when something unexpected goes wrong. It keeps running and puts the ball back into play.
+- When that happens, a crash note is sent quietly to the feedback table (kind "Crash") with the hole, what the ball was doing and the phone model.
+- Friends' ghost balls with incomplete saved shots are skipped instead of risking a freeze.
+
 ## 0.15.0
 - The game is now a proper project: the code is split into readable files, so changes can be made directly in GitHub.
 - Version number shown in the clubhouse.
