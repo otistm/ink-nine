@@ -94,10 +94,17 @@ function showFeedback(back){
     else { $('fbSend').disabled=false; $('fbMsg').textContent=`Couldn't send (${why}). Your note is still here, so you can try again or copy it.`; }
   });
 }
+// Plain-language line for a saved round, shown on its invitational card instead of the course description.
+function savedLine(r){
+  const holes=COURSES[EVENTS[r.ev].course].holes, i=r.hole||0, n=(r.scores||[]).filter(x=>x!=null).length;
+  const where=r.phase==='twist'?`Saved before hole ${i+1}, ${holes[i].name}.`:r.phase==='reward'||r.phase==='holed'?`Saved after hole ${i+1}, ${holes[i].name}.`:`Saved on hole ${i+1}, ${holes[i].name}, stroke ${(r.strokes||0)+1}.`;
+  const tp=(r.scores||[]).reduce((a,s,k)=>s!=null?a+s-holes[k].par:a,0);
+  return `<strong>${where}</strong> ${n?`${toPar(tp)[0].toUpperCase()+toPar(tp).slice(1)} through ${n}, `:''}${(r.points||0).toLocaleString()} points. Tap to continue.`;
+}
 function showHome(){
   if(!meta.name){ showName(false); return; }
   endTutorial(); if(EV&&EV.id==='tutorial') EV=EVENTS[0];
-  S.state='home'; const T=loadJSON('inknine-trophies',{}), B=loadJSON('inknine-bests',{});
+  S.state='home'; const T=loadJSON('inknine-trophies',{}), B=loadJSON('inknine-bests',{}), RUN=loadRun();
   const count=Object.keys(T).length;
   $('panel').innerHTML=`<h2 class="logo">Ink Nine</h2><p>Play golf. Do well. Get trophies.</p>
     <p class="asname">Playing as <b>${esc(meta.name)}</b>${ONLINE_OUTSIDE&&meta.grp?` in <b>${esc(meta.grp)}</b>`:''} <button class="linkbtn" id="editName">${ONLINE_OUTSIDE?'Change name or group':'Change name'}</button></p>
@@ -105,7 +112,8 @@ function showHome(){
     <div class="events">${EVENTS.map((e,k)=>{ const locked=k>0&&!T[EVENTS[k-1].id], m=T[e.id];
       return `<button class="event${locked?' locked':''}" data-k="${k}" ${locked?'aria-disabled="true"':''} style="animation-delay:${.1+k*.1}s">
         <span class="tw-wrap">${trophySVG(m)}<small>${m||(locked?'Locked':'No trophy')}</small></span>
-        <span class="ev"><b>${e.name}</b><i>${COURSES[e.course].name}, ${'●'.repeat(k+1)}${'○'.repeat(2-k)}</i><span>${locked?`Finish top three in ${EVENTS[k-1].name} to unlock.`:e.blurb}</span>${B[e.id]?`<small class="bestp">Best: ${B[e.id].toLocaleString()} points</small>`:''}</span></button>`; }).join('')}</div>
+        <span class="ev"><b>${e.name}</b><i>${COURSES[e.course].name}, ${'●'.repeat(k+1)}${'○'.repeat(2-k)}</i><span${RUN&&RUN.ev===k?' class="saved"':''}>${locked?`Finish top three in ${EVENTS[k-1].name} to unlock.`:RUN&&RUN.ev===k?savedLine(RUN):e.blurb}</span>${B[e.id]?`<small class="bestp">Best: ${B[e.id].toLocaleString()} points</small>`:''}</span></button>`; }).join('')}</div>
+    ${RUN?`<p class="resnote"><button class="linkbtn" id="restartBtn">Start ${esc(EVENTS[RUN.ev].name)} over</button>. Starting another invitational also replaces your saved round.</p>`:''}
     <button class="shopbtn" id="toShop"><span class="bag">${shopBagSVG()}</span><span><b>Pro shop</b><small>${meta.wallet.toLocaleString()} points to spend</small></span></button>
     ${meta.tutDone?'<p class="asname"><button class="linkbtn" id="tutAgain">Replay the tutorial</button></p>':''}
     <p class="netline" id="netline">${ONLINE_OUTSIDE?'Connecting to online play…':''}</p>
@@ -115,9 +123,10 @@ function showHome(){
   refreshNetLine(); if(document.getElementById('netline')) document.getElementById('netline').addEventListener('click',netDetails);
   { const t1=document.getElementById('tutBtn')||document.getElementById('tutAgain'); if(t1) t1.addEventListener('click',()=>{ audioInit(); sfx('tick'); startTutorial(); }); }
   $('fbBtn').addEventListener('click',()=>{ sfx('tick'); showFeedback(showHome); });
+  if(RUN) $('restartBtn').addEventListener('click',()=>{ audioInit(); sfx('tick'); startEvent(RUN.ev); });
   $('editName').addEventListener('click',()=>{ sfx('tick'); showName(true); });
   $('toShop').addEventListener('click',()=>{ audioInit(); sfx('tick'); showShop(); });
   [...$('panel').querySelectorAll('.event:not(.tut)')].forEach(b=>b.addEventListener('click',()=>{ audioInit(); const k=+b.dataset.k;
     if(b.classList.contains('locked')){ b.classList.remove('nope'); void b.offsetWidth; b.classList.add('nope'); tone(160,.12,'triangle',.1); return; }
-    sfx('tick'); startEvent(k); }));
+    sfx('tick'); if(RUN&&RUN.ev===k){ if(!resumeRun(RUN)) showHome(); return; } startEvent(k); }));
 }

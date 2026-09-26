@@ -82,6 +82,7 @@ function lookUp(e){
   cam.vx=look.vel.x*.5; cam.vy=look.vel.y*.5;
 }
 $('scope').addEventListener('click',()=>{ audioInit(); look.on?exitLook():enterLook(); });
+$('pause').addEventListener('click',()=>{ audioInit(); sfx('tick'); showPause(); });
 cv.addEventListener('wheel',e=>{ if(!look.on) return; e.preventDefault(); const z=Math.max(.45,Math.min(14,cam.z*Math.exp(-e.deltaY*.0015))); cam.z=z; camT.z=z; },{passive:false});
 cv.addEventListener('pointerdown',e=>{
   audioInit();

@@ -44,6 +44,20 @@ function startTutorial(){
   TUT.on=true; TUT.i=0; TUT.st={n:0}; $('card').hidden=true; startHole(0);
 }
 function endTutorial(){ TUT.on=false; coachShow(); }
+/* PAUSE — save the round and step out to the clubhouse (where feedback lives), then continue later. */
+function showPause(){
+  if(S.state!=='aim'||!EV) return;
+  if(look.on) exitLook(); openDial(false); drag=null;
+  const tut=EV.id==='tutorial', h=H(); S.state='card'; updHUD(); coachShow();
+  $('panel').innerHTML=`<p class="evn">${EV.name}, ${COURSES[EV.course].name}</p><h2>Paused</h2>
+    <p>Hole ${S.hole+1}: ${h.name}, stroke ${S.strokes+1}. ${tut?'The tutorial is not saved, so leaving starts it over next time.':'Your round is saved. Pick it up from the clubhouse whenever you like.'}</p>
+    <button class="btn" id="resume">Keep playing</button><button class="btn ghost" id="toHome">${tut?'Leave the tutorial':'Save and go to the clubhouse'}</button>
+    <p class="ver"><button class="linkbtn" id="fbP">Send feedback</button></p>`;
+  $('card').hidden=false; $('card').classList.remove('home'); $('card').scrollTop=0;
+  $('resume').addEventListener('click',()=>{ sfx('tick'); $('card').hidden=true; S.state='aim'; updHUD(); frameAim(); coachShow(); });
+  $('toHome').addEventListener('click',()=>{ sfx('tick'); S.state='aim'; saveRun('aim'); showHome(); });
+  $('fbP').addEventListener('click',()=>{ sfx('tick'); showFeedback(()=>{ S.state='aim'; showPause(); }); });
+}
 function saveRun(phase,extra){
   if(!EV||EV.id==='tutorial') return; const b=S.ball;
   const snap={v:1,ev:EVENTS.indexOf(EV),phase,hole:S.hole,scores:S.scores,holeLog:S.holeLog,points:S.points,holePts:S.holePts,streak:S.streak,upg:S.upg,bag:S.bag,club:S.club,
@@ -142,9 +156,10 @@ function showTwist(i,optsIn){
   const h=HOLES[i], opts=optsIn||twistOptions(i); saveRun('twist',{opts,hole:i});
   const how=i===0&&EV.id==='meadow'?`<div class="how">Pick a club, then drag back anywhere and let go. Bow your drag sideways to bend the shot. A ring shrinks onto the ball as you hold: let go as it lands for a pure strike. The ball button bottom-left sets where you strike it: low for a high, spinning flop, high for a low running knockdown.</div>`:'';
   const note=EV.double(i)?'This hole stacks two twists.':EV.forced(i)?'This hole forces a twist.':'Pick a twist';
-  $('panel').innerHTML=`<p class="evn">${EV.name}, ${COURSES[EV.course].name}</p><h2>Hole ${i+1}: ${h.name}</h2><p>Par ${h.par}, ${h.len} yards. ${h.tip}</p>${how}${ONLINE_OUTSIDE||IN_CLAUDE?`<p class="netline">${(()=>{ const fs=(S.friends||[]).filter(f=>f.holes[i]&&f.holes[i].shots&&f.holes[i].shots.length); return fs.length?`Ghosts on this hole: ${fs.map(f=>`${esc(f.name)} (${f.holes[i].s})`).join(', ')}.`:`No friend has played this hole yet${(S.friends||[]).length?'':' in this event'}.`; })()}</p>`:''}<h3>${note}</h3><div class="picks">${opts.map((o,k)=>pickHTML({...o,tag:o.ids.length===0?'Safe':o.ids.length>1?'Double twist':'Twist'},k)).join('')}</div>${kitLine()}<p class="ver"><button class="linkbtn" id="fbTw">Send feedback</button></p>`;
+  $('panel').innerHTML=`<p class="evn">${EV.name}, ${COURSES[EV.course].name}</p><h2>Hole ${i+1}: ${h.name}</h2><p>Par ${h.par}, ${h.len} yards. ${h.tip}</p>${how}${ONLINE_OUTSIDE||IN_CLAUDE?`<p class="netline">${(()=>{ const fs=(S.friends||[]).filter(f=>f.holes[i]&&f.holes[i].shots&&f.holes[i].shots.length); return fs.length?`Ghosts on this hole: ${fs.map(f=>`${esc(f.name)} (${f.holes[i].s})`).join(', ')}.`:`No friend has played this hole yet${(S.friends||[]).length?'':' in this event'}.`; })()}</p>`:''}<h3>${note}</h3><div class="picks">${opts.map((o,k)=>pickHTML({...o,tag:o.ids.length===0?'Safe':o.ids.length>1?'Double twist':'Twist'},k)).join('')}</div>${kitLine()}<p class="ver"><button class="linkbtn" id="fbTw">Send feedback</button> · <button class="linkbtn" id="homeTw">Save and go to the clubhouse</button></p>`;
   $('card').hidden=false; $('card').scrollTop=0; $('card').classList.toggle('home',S.state==='home');
   $('fbTw').addEventListener('click',()=>{ sfx('tick'); showFeedback(()=>showTwist(i,opts)); });
+  $('homeTw').addEventListener('click',()=>{ sfx('tick'); showHome(); });
   wirePicks((k,btn)=>{ const o=opts[k]; S.twist=o; btn.classList.add('chosen'); sfx('tick');
     if(o.ids.includes('short')){ const pick=shuffle(S.bag.filter(x=>x!==PUTTER)).slice(0,3); S.allowed=[...pick,PUTTER]; } else S.allowed=null;
     computeMod(); if(!usable(S.club)) S.club=S.bag.filter(usable).sort((a,b)=>a-b)[0];

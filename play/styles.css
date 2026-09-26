@@ -87,6 +87,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:
 .ev b{font-family:var(--display);font-style:italic;font-weight:900;font-size:21px;line-height:1.05}
 .ev i{font-style:normal;font-size:12px;font-weight:700;color:var(--soft);letter-spacing:.02em}
 .ev span{font-size:13px;font-weight:600;line-height:1.35}
+.ev .saved strong{font-weight:800}
 .bestp{font-size:11.5px;font-weight:700;color:var(--soft)}
 .cab{font-size:13px !important;font-weight:800 !important;color:var(--ink) !important}
 .board{border:2px solid var(--ink);border-radius:14px;overflow:hidden;margin:0 0 16px;text-align:left}
@@ -191,6 +192,14 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:
 #scope.pop{animation:scopePop .45s ease-out}
 #scope:focus-visible{outline:3px solid var(--ink);outline-offset:4px}
 @keyframes scopePop{0%{transform:scale(1)}30%{transform:scale(.8,1.22) rotate(-8deg)}60%{transform:scale(1.12,.9) rotate(4deg)}100%{transform:scale(1)}}
+#pause{position:fixed;right:19px;bottom:calc(env(safe-area-inset-bottom,0px) + 222px);z-index:6;width:44px;height:44px;border-radius:50%;
+  border:2.5px solid var(--ink);background:var(--paper);color:var(--ink);box-shadow:3px 4px 0 var(--ink);display:grid;place-items:center;cursor:pointer;padding:0;
+  transition:transform .28s cubic-bezier(.34,1.56,.64,1),opacity .2s}
+#pause svg{width:26px;height:26px}
+#pause:active{transform:scale(1.12,.86)}
+#pause:disabled{opacity:.3;cursor:default}
+#pause:focus-visible{outline:3px solid var(--ink);outline-offset:4px}
+.resnote{font-size:12px !important;color:var(--soft);margin:6px 0 10px !important}
 #lookhint{position:fixed;left:0;right:0;z-index:4;text-align:center;pointer-events:none;bottom:calc(env(safe-area-inset-bottom,0px) + 104px);font-size:14px;font-weight:700;padding:0 12px}
 #lookhint[hidden]{display:none}
 #lookhint span{background:var(--ink);color:var(--paper);border-radius:999px;padding:7px 14px;display:inline-block}

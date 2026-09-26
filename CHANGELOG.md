@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.16.0
+- New pause button above the telescope. It opens a card to keep playing, save and go to the clubhouse, or send feedback.
+- In the clubhouse, a saved round replaces its invitational's description with where you left off (hole, stroke, score and points). Tap the card to pick up exactly there, or use "Start over" below to begin again.
+- The card before each hole also has "Save and go to the clubhouse".
+- Leaving the tutorial from the pause card takes you to the clubhouse (the tutorial is not saved).
+
 ## 0.15.1
 - The game no longer freezes with the ball stuck when something unexpected goes wrong. It keeps running and puts the ball back into play.
 - When that happens, a crash note is sent quietly to the feedback table (kind "Crash") with the hole, what the ball was doing and the phone model.
