@@ -94,6 +94,13 @@ function showFeedback(back){
     else { $('fbSend').disabled=false; $('fbMsg').textContent=`Couldn't send (${why}). Your note is still here, so you can try again or copy it.`; }
   });
 }
+// Plain-language line for a saved round, shown on its invitational card instead of the course description.
+function savedLine(r){
+  const holes=COURSES[EVENTS[r.ev].course].holes, i=r.hole||0, n=(r.scores||[]).filter(x=>x!=null).length;
+  const where=r.phase==='twist'?`Saved before hole ${i+1}, ${holes[i].name}.`:r.phase==='reward'||r.phase==='holed'?`Saved after hole ${i+1}, ${holes[i].name}.`:`Saved on hole ${i+1}, ${holes[i].name}, stroke ${(r.strokes||0)+1}.`;
+  const tp=(r.scores||[]).reduce((a,s,k)=>s!=null?a+s-holes[k].par:a,0);
+  return `<strong>${where}</strong> ${n?`${toPar(tp)[0].toUpperCase()+toPar(tp).slice(1)} through ${n}, `:''}${(r.points||0).toLocaleString()} points. Tap to continue.`;
+}
 function showHome(){
   if(!meta.name){ showName(false); return; }
   endTutorial(); if(EV&&EV.id==='tutorial') EV=EVENTS[0];
@@ -101,12 +108,12 @@ function showHome(){
   const count=Object.keys(T).length;
   $('panel').innerHTML=`<h2 class="logo">Ink Nine</h2><p>Play golf. Do well. Get trophies.</p>
     <p class="asname">Playing as <b>${esc(meta.name)}</b>${ONLINE_OUTSIDE&&meta.grp?` in <b>${esc(meta.grp)}</b>`:''} <button class="linkbtn" id="editName">${ONLINE_OUTSIDE?'Change name or group':'Change name'}</button></p>
-    ${RUN?`<button class="btn resume" id="contBtn">Continue your round<small>${esc(EVENTS[RUN.ev].name)}, hole ${(RUN.hole||0)+1}${RUN.phase==='aim'?`, stroke ${(RUN.strokes||0)+1}`:''}</small></button><p class="resnote">Starting another invitational replaces this saved round.</p>`:''}
     ${meta.tutDone?'':`<button class="event tut" id="tutBtn" style="animation-delay:.05s"><span class="tw-wrap"><svg width="44" height="44" viewBox="0 0 40 40" aria-hidden="true"><g stroke="#000" stroke-width="2.4" stroke-linecap="round" fill="none"><circle cx="20" cy="22" r="11" fill="#fff"/><path d="M14 17a8 8 0 0 1 6-3"/><path d="M29 6v12"/><path d="M29 6c4-1 6 2 9 1l-1 5c-3 1-5-2-8-1" fill="#000"/></g></svg><small>New here?</small></span><span class="ev"><b>Play the tutorial</b><i>Practice Green, 3 holes</i><span>Learn the swing, clubs, tempo, curve and spin in a few minutes. Earn 1,000 points for the pro shop.</span></span></button>`}
     <div class="events">${EVENTS.map((e,k)=>{ const locked=k>0&&!T[EVENTS[k-1].id], m=T[e.id];
       return `<button class="event${locked?' locked':''}" data-k="${k}" ${locked?'aria-disabled="true"':''} style="animation-delay:${.1+k*.1}s">
         <span class="tw-wrap">${trophySVG(m)}<small>${m||(locked?'Locked':'No trophy')}</small></span>
-        <span class="ev"><b>${e.name}</b><i>${COURSES[e.course].name}, ${'●'.repeat(k+1)}${'○'.repeat(2-k)}</i><span>${locked?`Finish top three in ${EVENTS[k-1].name} to unlock.`:e.blurb}</span>${B[e.id]?`<small class="bestp">Best: ${B[e.id].toLocaleString()} points</small>`:''}</span></button>`; }).join('')}</div>
+        <span class="ev"><b>${e.name}</b><i>${COURSES[e.course].name}, ${'●'.repeat(k+1)}${'○'.repeat(2-k)}</i><span${RUN&&RUN.ev===k?' class="saved"':''}>${locked?`Finish top three in ${EVENTS[k-1].name} to unlock.`:RUN&&RUN.ev===k?savedLine(RUN):e.blurb}</span>${B[e.id]?`<small class="bestp">Best: ${B[e.id].toLocaleString()} points</small>`:''}</span></button>`; }).join('')}</div>
+    ${RUN?`<p class="resnote"><button class="linkbtn" id="restartBtn">Start ${esc(EVENTS[RUN.ev].name)} over</button>. Starting another invitational also replaces your saved round.</p>`:''}
     <button class="shopbtn" id="toShop"><span class="bag">${shopBagSVG()}</span><span><b>Pro shop</b><small>${meta.wallet.toLocaleString()} points to spend</small></span></button>
     ${meta.tutDone?'<p class="asname"><button class="linkbtn" id="tutAgain">Replay the tutorial</button></p>':''}
     <p class="netline" id="netline">${ONLINE_OUTSIDE?'Connecting to online play…':''}</p>
@@ -116,10 +123,10 @@ function showHome(){
   refreshNetLine(); if(document.getElementById('netline')) document.getElementById('netline').addEventListener('click',netDetails);
   { const t1=document.getElementById('tutBtn')||document.getElementById('tutAgain'); if(t1) t1.addEventListener('click',()=>{ audioInit(); sfx('tick'); startTutorial(); }); }
   $('fbBtn').addEventListener('click',()=>{ sfx('tick'); showFeedback(showHome); });
-  if(RUN) $('contBtn').addEventListener('click',()=>{ audioInit(); sfx('tick'); if(!resumeRun(RUN)) showHome(); });
+  if(RUN) $('restartBtn').addEventListener('click',()=>{ audioInit(); sfx('tick'); startEvent(RUN.ev); });
   $('editName').addEventListener('click',()=>{ sfx('tick'); showName(true); });
   $('toShop').addEventListener('click',()=>{ audioInit(); sfx('tick'); showShop(); });
   [...$('panel').querySelectorAll('.event:not(.tut)')].forEach(b=>b.addEventListener('click',()=>{ audioInit(); const k=+b.dataset.k;
     if(b.classList.contains('locked')){ b.classList.remove('nope'); void b.offsetWidth; b.classList.add('nope'); tone(160,.12,'triangle',.1); return; }
-    sfx('tick'); startEvent(k); }));
+    sfx('tick'); if(RUN&&RUN.ev===k){ if(!resumeRun(RUN)) showHome(); return; } startEvent(k); }));
 }

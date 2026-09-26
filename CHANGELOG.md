@@ -2,7 +2,7 @@
 
 ## 0.16.0
 - New pause button above the telescope. It opens a card to keep playing, save and go to the clubhouse, or send feedback.
-- The clubhouse shows "Continue your round" when you have a saved round, and picks up exactly where you left off.
+- In the clubhouse, a saved round replaces its invitational's description with where you left off (hole, stroke, score and points). Tap the card to pick up exactly there, or use "Start over" below to begin again.
 - The card before each hole also has "Save and go to the clubhouse".
 - Leaving the tutorial from the pause card takes you to the clubhouse (the tutorial is not saved).
 
