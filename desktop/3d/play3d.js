@@ -6,7 +6,7 @@
 "use strict";
 
 const P3_COURSE = 0, P3_HOLE = 2;
-const C3 = { mode: 'behind', span: 60, yaw: 0, zoom: 1, ready: false, pos: new THREE.Vector3(), look: new THREE.Vector3(), lastState: '', yawDrag: null };
+const C3 = { dither: false, mode: 'behind', span: 60, yaw: 0, zoom: 1, ready: false, pos: new THREE.Vector3(), look: new THREE.Vector3(), lastState: '', yawDrag: null };
 let three = null;
 
 /* ---------- start straight on the hole; no saving, no online, no invitational ---------- */
@@ -145,10 +145,16 @@ function worldAware(mat, fragAfterMap, uniforms) {
   return mat;
 }
 
+/* ---------- 8x8 Bayer threshold map for the dithering ---------- */
+const BAYER = (() => { const m = [[0]]; let M = m;
+  for (let n = 1; n < 8; n *= 2) { const N = []; for (let y = 0; y < n * 2; y++) { N.push([]); for (let x = 0; x < n * 2; x++) N[y].push(4 * M[y % n][x % n] + [[0, 2], [3, 1]][(y / n) | 0][(x / n) | 0]); } M = N; }
+  const d = new Uint8Array(64 * 3); for (let i = 0; i < 64; i++) { const v = Math.round((M[(i / 8) | 0][i % 8] + .5) / 64 * 255); d[i * 3] = d[i * 3 + 1] = d[i * 3 + 2] = v; }
+  const t = new THREE.DataTexture(d, 8, 8, THREE.RGBFormat); t.minFilter = t.magFilter = THREE.NearestFilter; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.generateMipmaps = false; t.needsUpdate = true; return t; })();
+
 /* ---------- outline pass: depth and normal edges, traced thin and black, fading into the haze ---------- */
 const EDGE_VS = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }';
 const EDGE_FS = `
-uniform sampler2D tColor, tNormal, tDepth; uniform vec2 res; uniform float cn, cf, fogNear, fogFar; varying vec2 vUv;
+uniform sampler2D tColor, tNormal, tDepth, bayer; uniform vec2 res; uniform float cn, cf, fogNear, fogFar, dither, cell; varying vec2 vUv;
 float vz(vec2 uv){ float d = texture2D(tDepth, uv).x; return cn * cf / (cf - d * (cf - cn)); }
 vec3 nrm(vec2 uv){ return texture2D(tNormal, uv).xyz * 2. - 1.; }
 void main(){
@@ -159,14 +165,20 @@ void main(){
   vec3 n = nrm(vUv); float nd = max(max(1. - dot(n, nrm(vUv - vec2(p.x, 0.))), 1. - dot(n, nrm(vUv + vec2(p.x, 0.)))), max(1. - dot(n, nrm(vUv + vec2(0., p.y))), 1. - dot(n, nrm(vUv - vec2(0., p.y)))));
   float en = smoothstep(.18, .4, nd);
   float e = max(ed, en) * (1. - smoothstep(fogNear, fogFar, c));
-  vec3 col = texture2D(tColor, vUv).rgb;
-  gl_FragColor = vec4(col * (1. - e * .92), 1.);
+  vec3 col = texture2D(tColor, vUv).rgb * (1. - e * .92);
+  if (dither > .5) {   // 1-bit: every pixel pure black or white, greys become an ordered (Bayer) dot pattern
+    float l = dot(col, vec3(.299, .587, .114));
+    l = clamp((l - .5) * 1.3 + .57, 0., 1.);
+    float t = texture2D(bayer, gl_FragCoord.xy / (8. * cell)).r;
+    col = vec3(step(t, l));
+  }
+  gl_FragColor = vec4(col, 1.);
 }`;
 function makeTargets() {
   const w = Math.round(W * DPR), hh = Math.round(Hh * DPR), mk = () => { const t = new THREE.WebGLRenderTarget(w, hh); t.depthTexture = new THREE.DepthTexture(w, hh); t.depthTexture.type = THREE.UnsignedIntType; return t; };
   if (three.rtC) { three.rtC.dispose(); three.rtN.dispose(); }
   three.rtC = mk(); three.rtN = mk();
-  const u = three.edge.material.uniforms; u.tColor.value = three.rtC.texture; u.tDepth.value = three.rtC.depthTexture; u.tNormal.value = three.rtN.texture; u.res.value.set(w, hh);
+  const u = three.edge.material.uniforms; u.cell.value = 2 * DPR; u.tColor.value = three.rtC.texture; u.tDepth.value = three.rtC.depthTexture; u.tNormal.value = three.rtN.texture; u.res.value.set(w, hh);
 }
 
 /* ---------- pieces of the course ---------- */
@@ -205,7 +217,8 @@ function build3D(h) {
     renderer.setPixelRatio(DPR); renderer.setSize(W, Hh, false); renderer.setClearColor(0xffffff);
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap; renderer.shadowMap.autoUpdate = false;
     const edge = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ vertexShader: EDGE_VS, fragmentShader: EDGE_FS, depthTest: false, depthWrite: false,
-      uniforms: { tColor: { value: null }, tNormal: { value: null }, tDepth: { value: null }, res: { value: new THREE.Vector2() }, cn: { value: .3 }, cf: { value: 5000 }, fogNear: { value: 300 }, fogFar: { value: 1500 } } }));
+      uniforms: { tColor: { value: null }, tNormal: { value: null }, tDepth: { value: null }, res: { value: new THREE.Vector2() }, cn: { value: .3 }, cf: { value: 5000 }, fogNear: { value: 300 }, fogFar: { value: 1500 },
+        bayer: { value: BAYER }, dither: { value: C3.dither ? 1 : 0 }, cell: { value: 2 * DPR } } }));
     const edgeScene = new THREE.Scene(); edgeScene.add(edge);
     three = { renderer, camera: new THREE.PerspectiveCamera(50, W / Hh, .3, 5000), edge, edgeScene, edgeCam: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), normalMat: new THREE.MeshNormalMaterial({ side: THREE.DoubleSide }) };
     makeTargets();
@@ -459,3 +472,13 @@ $('viewBtn').addEventListener('click', () => { audioInit(); if (look.on) exitLoo
 addEventListener('keydown', e => { if ((e.key === 'v' || e.key === 'V') && $('card').hidden && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); $('viewBtn').click(); } });
 { let m = 'behind'; try { m = localStorage.getItem('inknine-view') || 'behind'; } catch (_) {} setView(m === 'aerial' ? 'aerial' : 'behind', true); }
 $('lookhint').firstElementChild.textContent = 'The whole hole from above. Press Space to go back.';
+// dithering on or off: B or the button; remembered between visits
+function setDither(on, quiet) {
+  C3.dither = on; try { localStorage.setItem('inknine-dither', on ? '1' : '0'); } catch (_) {}
+  if (three) three.edge.material.uniforms.dither.value = on ? 1 : 0;
+  const b = $('ditherBtn'); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on));
+  if (!quiet) { sfx('tick'); tone(on ? 900 : 600, .12, 'square', .04, on ? 450 : 1200); }
+}
+$('ditherBtn').addEventListener('click', () => { audioInit(); setDither(!C3.dither); $('ditherBtn').blur(); });
+addEventListener('keydown', e => { if ((e.key === 'b' || e.key === 'B') && $('card').hidden && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); $('ditherBtn').click(); } });
+{ let on = false; try { on = localStorage.getItem('inknine-dither') === '1'; } catch (_) {} setDither(on, true); }

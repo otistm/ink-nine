@@ -7,6 +7,7 @@
 - Trees have trunks, branches and clumped crowns that sway with the wind. The ball has a seam so you can see it roll and spin.
 - The 2D game's animation carries over: the ball stretches in flight and on the roll and squashes on landing, squashes and trembles as you pull back (anticipation), the flag springs when the ball drops (follow-through), the camera rides a slightly springy rig and shakes on big hits, and it drops in low beside the cup when a putt is tracking in.
 - Aerial view: press V or the button above the telescope to play from high above, with the hole running up the screen like the 2D game. The camera frames your ball and where the shot is heading, and follows the ball in the air. Drag back away from where you want the ball to go, in any direction. Press V again to go back behind the ball. The page remembers which view you used last.
+- Dithered mode: press B or the Dither button to turn everything into pure black and white, with greys drawn as a fine ordered dot pattern, like a classic 1-bit computer game. Press B again for the grey toon look. The page remembers your choice.
 - Uses one outside library, Three.js, loaded from a CDN on this page only. The phone game and desktop edition don't load it.
 
 ## 0.23.0
