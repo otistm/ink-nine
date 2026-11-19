@@ -189,62 +189,18 @@ function growGrass(cx, cy) {
   im.count = n; im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true;
 }
 
-/* ---------- trees: grown branch by branch with real bark, thousands of leaves each ---------- */
-function leafAtlas() {   // four sprigs of leaves drawn with veins, on a transparent background
-  const c = document.createElement('canvas'); c.width = c.height = 512; const g = c.getContext('2d'), r = seeded(41);
-  for (let cell = 0; cell < 4; cell++) {
-    const ox = (cell % 2) * 256, oy = ((cell / 2) | 0) * 256; g.save(); g.translate(ox + 128, oy + 236);
-    g.strokeStyle = '#3d2f1c'; g.lineWidth = 3; g.beginPath(); g.moveTo(0, 0); g.quadraticCurveTo(8, -110, 0, -210); g.stroke();
-    for (let i = 0; i < 9; i++) {
-      const t = .15 + i / 9 * .85, y = -210 * t, side = i % 2 ? 1 : -1, ang = side * (.7 + r() * .4) - .2 * side, len = 60 + r() * 34;
-      const hue = 85 + r() * 30, light = 22 + r() * 16; g.save(); g.translate(4 * Math.sin(t * 3), y); g.rotate(ang);
-      g.fillStyle = `hsl(${hue},${45 + r() * 20}%,${light}%)`; g.beginPath(); g.moveTo(0, 0); g.bezierCurveTo(len * .35, -len * .22, len * .8, -len * .16, len, 0); g.bezierCurveTo(len * .8, len * .16, len * .35, len * .22, 0, 0); g.fill();
-      g.strokeStyle = `hsla(${hue},40%,${light + 14}%,.8)`; g.lineWidth = 1.4; g.beginPath(); g.moveTo(0, 0); g.lineTo(len * .92, 0); g.stroke(); g.restore();
-    }
-    g.restore();
-  }
-  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8; return t;
-}
-function mergeGeos(parts) {   // parts: {pos, nrm, uv, idx}
-  const pos = [], nrm = [], uv = [], idx = []; let base = 0;
-  parts.forEach(p => { pos.push(...p.pos); nrm.push(...p.nrm); uv.push(...p.uv); p.idx.forEach(i => idx.push(i + base)); base += p.pos.length / 3; });
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); return g;
-}
-function treeVariant(seed) {   // a tree of crown radius 1, trunk base at the origin
-  const r = seeded(seed), bark = [], leaves = [], up = new THREE.Vector3(0, 1, 0), crownC = new THREE.Vector3(0, 1.4, 0);
-  const tube = (a, b, r0, r1) => {   // a tapered, slightly gnarled limb from a to b
-    const dir = b.clone().sub(a), len = dir.length(); dir.normalize();
-    const side = Math.abs(dir.y) < .99 ? new THREE.Vector3().crossVectors(dir, up).normalize() : new THREE.Vector3(1, 0, 0), side2 = new THREE.Vector3().crossVectors(dir, side);
-    const S = 9, p = { pos: [], nrm: [], uv: [], idx: [] };
-    [0, 1].forEach(e => { const c = e ? b : a, rad = e ? r1 : r0; for (let i = 0; i <= S; i++) { const t = i / S * TAU, n = side.clone().multiplyScalar(Math.cos(t)).addScaledVector(side2, Math.sin(t)), wob = 1 + .12 * Math.sin(t * 3 + seed);
-      p.pos.push(c.x + n.x * rad * wob, c.y + n.y * rad * wob, c.z + n.z * rad * wob); p.nrm.push(n.x, n.y, n.z); p.uv.push(i / S * 2, e * len * 2.2); } });
-    for (let i = 0; i < S; i++) p.idx.push(i, i + S + 1, i + 1, i + 1, i + S + 1, i + S + 2);
-    bark.push(p);
-  };
-  const cluster = (c, size, count) => {
-    for (let k = 0; k < count; k++) {
-      const q = new THREE.Vector3(r() * 2 - 1, r() * 2 - 1, r() * 2 - 1); if (q.lengthSq() > 1) { k--; continue; }
-      const ctr = c.clone().addScaledVector(q, size), sz = .2 + r() * .13, n = ctr.clone().sub(crownC).normalize();
-      const ax = new THREE.Vector3(r() - .5, r() - .5, r() - .5).normalize(), ay = new THREE.Vector3().crossVectors(ax, n).normalize().multiplyScalar(sz);
-      const bx = ax.clone().multiplyScalar(sz), cell = (r() * 4) | 0, u0 = (cell % 2) * .5, v0 = ((cell / 2) | 0) * .5;
-      const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]], p = { pos: [], nrm: [], uv: [], idx: [0, 1, 2, 0, 2, 3] };
-      corners.forEach(([i, j]) => { p.pos.push(ctr.x + bx.x * i + ay.x * j, ctr.y + bx.y * i + ay.y * j, ctr.z + bx.z * i + ay.z * j); p.nrm.push(n.x, n.y, n.z); p.uv.push(u0 + (i + 1) * .25, 1 - (v0 + (1 - j) * .25)); });
-      leaves.push(p);
-    }
-  };
-  const grow = (a, dir, len, rad, depth) => {
-    const b = a.clone().addScaledVector(dir, len); tube(a, b, rad, rad * .7);
-    if (depth === 0) { cluster(b, .36 + r() * .12, 30); return; }   // fewer, bigger leaves in looser clumps: gaps you can see through
-    const n = depth >= 3 ? 3 + (r() < .4 ? 1 : 0) : 2 + (r() < .5 ? 1 : 0);
-    for (let k = 0; k < n; k++) {
-      const spread = .45 + r() * .45, az = k / n * TAU + r() * 1.2, out = new THREE.Vector3(Math.cos(az), 0, Math.sin(az));
-      const nd = dir.clone().multiplyScalar(Math.cos(spread)).addScaledVector(out, Math.sin(spread)).add(new THREE.Vector3(0, .25, 0)).normalize();
-      grow(b, nd, len * (.62 + r() * .16), rad * .66, depth - 1);
-    }
-    if (depth <= 2) cluster(a.clone().lerp(b, .7), .22, 14);
-  };
-  grow(new THREE.Vector3(0, 0, 0), new THREE.Vector3((r() - .5) * .1, 1, (r() - .5) * .1).normalize(), .78, .11, 4);
-  return { bark: mergeGeos(bark), leaves: mergeGeos(leaves) };
+/* ---------- trees: modelled in Blender (desktop/3d/assets/trees), four species, with soft shading baked in ----------
+   Each file holds a "bark" mesh and a "leaves" mesh (cards cut out of leaf_atlas.png). Their vertex colours carry
+   the baked shading: inner leaves and the underside of the crown are darker. Crown radius is about 1 unit. */
+const TREE_KINDS = ['oak_a', 'oak_b', 'birch', 'pine'];
+let TREE_GEO = null;   // filled once the files arrive
+function loadTreeFiles() {
+  if (TREE_GEO || !THREE.GLTFLoader) return Promise.resolve(TREE_GEO);
+  const loader = new THREE.GLTFLoader();
+  return Promise.all(TREE_KINDS.map(k => new Promise(res => loader.load(ASSET + 'trees/' + k + '.glb', gl => {
+    const parts = {}; gl.scene.traverse(o => { if (o.isMesh) { const n = (o.name + ' ' + (o.geometry.name || '')).toLowerCase(); if (n.includes('bark')) parts.bark = o.geometry; else if (n.includes('leaves')) parts.leaves = o.geometry; } });
+    res(parts);
+  }, undefined, () => res({}))))).then(list => { TREE_GEO = list; return list; });
 }
 
 /* ---------- render target and the final pass: exposure, filmic tone, then colour, grey or 1-bit dither ---------- */
@@ -355,8 +311,7 @@ function build3D(h) {
   ring.holes.push(new THREE.Path([V2(bb.x0 + .5, -bb.y0 - .5), V2(bb.x0 + .5, -bb.y1 + .5), V2(bb.x1 - .5, -bb.y1 + .5), V2(bb.x1 - .5, -bb.y0 - .5)]));
   const fg = new THREE.ShapeGeometry(ring); fg.rotateX(-Math.PI / 2);
   { const p = fg.attributes.position, fuv = new Float32Array(p.count * 2); for (let i = 0; i < p.count; i++) { fuv[i * 2] = p.getX(i) / 2.4; fuv[i * 2 + 1] = p.getZ(i) / 2.4; } fg.setAttribute('uv', new THREE.BufferAttribute(fuv, 2)); }
-  const far = new THREE.Mesh(fg, worldAware(new THREE.MeshStandardMaterial({ map: TEX.grass, normalMap: TEX.grassN, roughness: .95 }), { uniforms: {},
-    afterMap: 'vec3 macro = mapTexelToLinear(texture2D(map, vWp.xz * .021)).rgb; diffuseColor.rgb *= mix(vec3(1.), macro * 2.2, .4) * vec3(.55, .85, .32) * 1.9 * .75 * 1.25 * .95;' }));
+  const far = new THREE.Mesh(fg, groundMat);   // the very same ground material: beyond the hole it reads the splat's edge, which is plain rough
   far.position.y = -.02; far.receiveShadow = true; scene.add(far);
   // the lake: a still, dark surface that mirrors the sky, with small moving ripples
   h.water.forEach(s => {
@@ -368,15 +323,16 @@ function build3D(h) {
   });
   // grass blades (grown around the ball for each shot)
   T.grass = grassMesh(); scene.add(T.grass);
-  // trees: four grown variants, instanced for the hole's trees and a forest line beyond it
-  const leafMap = leafAtlas(), variants = [11, 23, 37, 53].map(treeVariant);
-  const barkMat = new THREE.MeshStandardMaterial({ map: TEX.bark, normalMap: TEX.barkN, roughness: .95, color: 0xb8ad9c });
-  const leafMat = worldAware(new THREE.MeshStandardMaterial({ map: leafMap, alphaTest: .5, side: THREE.DoubleSide, roughness: .75, color: 0xbccb94, envMapIntensity: .7 }), { uniforms: U, varyings: 'varying float vTop;',
-    afterMap: 'diffuseColor.rgb *= .62 + .55 * vTop;',   // crowns brighten toward the sunlit top
+  // trees: the four Blender species, instanced for the hole's trees and a forest line beyond it
+  const leafMap = texLoader.load(ASSET + 'trees/leaf_atlas.png'); leafMap.encoding = THREE.sRGBEncoding; leafMap.flipY = false; leafMap.anisotropy = 8;   // glTF texture coordinates
+  const barkMat = new THREE.MeshStandardMaterial({ map: TEX.bark, normalMap: TEX.barkN, roughness: .95, color: 0xb8ad9c, vertexColors: true });
+  const leafMat = worldAware(new THREE.MeshStandardMaterial({ map: leafMap, alphaTest: .5, side: THREE.DoubleSide, roughness: .75, color: 0xd6e2b4, envMapIntensity: .7, vertexColors: true }), { uniforms: U, varyings: 'varying float vTop;',
+    afterMap: 'diffuseColor.rgb *= .75 + .4 * vTop;',   // crowns brighten toward the sunlit top
     vertex: 'vTop = smoothstep(.4, 2.3, position.y); vec3 ip = vec3(instanceMatrix[3].x, 0., instanceMatrix[3].z); float hy = position.y * .35; transformed.x += (sin(time * 1.6 + ip.x * .13 + position.y * 2.) * .03 + wind.x * .06) * hy; transformed.z += (cos(time * 1.3 + ip.z * .11 + position.x * 2.) * .03 + wind.y * .06) * hy;' });
   const leafDepth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: leafMap, alphaTest: .5 });
-  const plants = [];   // [x, y, r, variant]
-  h.trees.forEach((tr, i) => plants.push([tr[0], tr[1], tr[2], i % 4]));
+  // which species where: the hole's own trees are broadleaves (oaks and birches); the forest mixes in pines
+  const plants = [];   // [x, y, r, kind index]
+  h.trees.forEach((tr, i) => plants.push([tr[0], tr[1], tr[2], [0, 1, 0, 2][i % 4]]));
   { const route = [h.tee, ...h.fair.filter(s => s.t === 'c').flatMap(s => s.pts), h.cup], rnd = seeded(7);
     // keep the forest well back from anything in play, so the corridor of the hole is obvious from above
     let x0_ = 0, y0_ = 0;
@@ -385,16 +341,19 @@ function build3D(h) {
       && route.every((p, k) => k === route.length - 1 || segDist(x, y, p, route[k + 1]) > 60) && plants.every(p => Math.hypot(p[0] - x, p[1] - y) > p[2] + 5); };
     for (let k = 0; k < 900 && plants.length < h.trees.length + 170; k++) {
       const a = route[(rnd() * (route.length - 1)) | 0], t = rnd() * 2 - .5, x = a[0] + (rnd() * 2 - 1) * 200, y = a[1] + t * 120;
-      if (clear(x, y)) plants.push([x, y, 6 + rnd() * 6, (rnd() * 4) | 0]); }
+      if (clear(x, y)) { const kr = rnd(); plants.push([x, y, 6 + rnd() * 6, kr < .3 ? 3 : kr < .58 ? 0 : kr < .85 ? 1 : 2]); } }
   }
-  variants.forEach((v, vi) => {
-    const mine = plants.filter(p => p[3] === vi), o = new THREE.Object3D(), rnd = seeded(vi + 3);
-    const bm = new THREE.InstancedMesh(v.bark, barkMat, mine.length), lm = new THREE.InstancedMesh(v.leaves, leafMat, mine.length);
-    const tint = new THREE.Color();   // each tree its own shade of green
-    mine.forEach(([x, y, r], k) => { o.position.set(x, groundY(h, x, y) - .1, y); o.rotation.set(0, rnd() * TAU, 0); o.scale.setScalar(r); o.updateMatrix(); bm.setMatrixAt(k, o.matrix); lm.setMatrixAt(k, o.matrix);
-      tint.setHSL(.2 + rnd() * .07, .25 + rnd() * .3, .42 + rnd() * .22); lm.setColorAt(k, tint); });
-    bm.castShadow = bm.receiveShadow = lm.castShadow = lm.receiveShadow = true; lm.customDepthMaterial = leafDepth;
-    scene.add(bm, lm);
+  loadTreeFiles().then(geos => {
+    if (!geos || three.scene !== scene) return;
+    geos.forEach((v, vi) => {
+      const mine = plants.filter(p => p[3] === vi); if (!mine.length || !v.bark || !v.leaves) return;
+      const o = new THREE.Object3D(), rnd = seeded(vi + 3), tint = new THREE.Color();
+      const bm = new THREE.InstancedMesh(v.bark, barkMat, mine.length), lm = new THREE.InstancedMesh(v.leaves, leafMat, mine.length);
+      mine.forEach(([x, y, r], k) => { o.position.set(x, groundY(h, x, y) - .1, y); o.rotation.set(0, rnd() * TAU, 0); o.scale.setScalar(r); o.updateMatrix(); bm.setMatrixAt(k, o.matrix); lm.setMatrixAt(k, o.matrix);
+        tint.setHSL(.2 + rnd() * .07, .2 + rnd() * .25, .5 + rnd() * .16); lm.setColorAt(k, tint); });   // each tree its own shade of green
+      bm.castShadow = bm.receiveShadow = lm.castShadow = lm.receiveShadow = true; lm.customDepthMaterial = leafDepth;
+      scene.add(bm, lm);
+    });
   });
   // shrubs: a real scanned bush model, scattered at the foot of the trees
   if (THREE.GLTFLoader) new THREE.GLTFLoader().load(ASSET + 'shrub_04/shrub_04_1k.gltf', gl => {
