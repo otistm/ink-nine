@@ -591,3 +591,89 @@ $('bitPx').addEventListener('input', e => { BIT.px = parseFloat(e.target.value);
 $('bitD').addEventListener('input', e => { BIT.d = parseFloat(e.target.value); setBit(); });
 $('bitReset').addEventListener('click', () => { Object.assign(BIT, { px: 2, pal: 'Retro 16', d: .7 }); setBit(); sfx('tick'); });
 { try { Object.assign(BIT, JSON.parse(localStorage.getItem('inknine-bit2') || '{}')); } catch (_) {} if (!PALETTES[BIT.pal]) BIT.pal = 'Retro 16'; setBit(true); }
+
+/* ============================================================
+   GOLD: every club has a price per shot. Starter clubs are free; better ones cost gold. You earn gold by
+   playing well, spend it on shots, and spend it between holes on permanent club upgrades. One purse,
+   kept on this computer (the 3D page's own save, never the phone game's).
+   ============================================================ */
+const CLUB_GOLD = { DR: 0, '3W': 2, '5I': 1, '7I': 0, '9I': 1, PW: 0, SW: 1, PT: 0 };
+const GOLD_START = 6, GOLD_STIPEND = 3, UPGRADE_GOLD = [6, 10, 15, 22, 30];
+const clubGold = i => CLUB_GOLD[CLUBS[i].id] || 0;
+if (typeof meta.gold !== 'number') { meta.gold = GOLD_START; saveMeta(); }
+C3.holeGold = 0;
+
+// clubs you can't afford are greyed out and can't be picked (the game's own "not allowed" state)
+function refreshAfford() {
+  S.allowed = CLUBS.map((c, i) => i).filter(i => clubGold(i) <= meta.gold);
+  if (S.state === 'aim' && !S.allowed.includes(S.club)) setClub(bestClub(), false);
+  refreshChips();
+}
+function showGold(delta) {
+  $('goldv').textContent = meta.gold;
+  const el = $('purse'); el.classList.remove('bump', 'spend'); void el.offsetWidth; if (delta) el.classList.add(delta > 0 ? 'bump' : 'spend');
+}
+function earn(n, why) {
+  if (!n) return; meta.gold += n; C3.holeGold += n; saveMeta(); showGold(n); refreshAfford();
+  const b = S.ball; label(b.x, b.y, `+${n} gold, ${why}`, .45, false, 18); tone(1320, .08, 'triangle', .06); setTimeout(() => tone(1760, .1, 'triangle', .05), 70);
+}
+// paying for the shot as you swing
+{ const base = shoot; shoot = function (ang, power, curve, quality) {
+  const cost = clubGold(S.club);
+  if (cost) { if (cost > meta.gold) { refreshAfford(); return; } meta.gold -= cost; saveMeta(); showGold(-cost); label(S.ball.x, S.ball.y, `−${cost} gold`, 0, false, -10); sfx('tick'); }
+  base(ang, power, curve, quality); refreshAfford();
+}; }
+// earning: pure strikes, finding the fairway or the green, holing out from distance
+{ const base = awardShot; awardShot = function (result) {
+  const sh = S.shot, fresh = sh && !sh.done; base(result); if (!fresh) return;
+  const lie = lieNow();
+  if (result === 'sunk') {
+    if (S.strokes === 1) earn(10, 'hole in one');
+    else if (!sh.isPutt) earn(4, 'holed out');
+    else if (sh.dist0 * 3 >= 15) earn(2, 'long putt');
+  } else if (!sh.isPutt) {
+    if (sh.quality === 'pure') earn(1, 'pure strike');
+    if (lie === 'green' && sh.lie !== 'green') earn(1, 'on the green');
+    else if (lie === 'fairway' && (sh.lie === 'tee' || sh.lie === 'rough' || sh.lie === 'sand' || sh.lie === 'fairway')) earn(1, 'fairway');
+  }
+}; }
+// the score on the hole pays out too
+{ const base = bankHole; bankHole = function (score) {
+  const first = !S.banked; base(score); if (!first) return;
+  const d = score - H().par; earn(d <= -2 ? 8 : d === -1 ? 4 : d === 0 ? 2 : 0, scoreName(d, score).toLowerCase());
+}; }
+// prices on the club chips, and the price of the club in hand under the shot line
+{ const base = refreshChips; refreshChips = function () { base();
+  CLUBS.forEach((c, i) => { const b = clubsEl.children[i]; if (!b) return; const g = clubGold(i); b.insertAdjacentHTML('beforeend', g ? `<em class="gc" title="${g} gold a shot">${g}</em>` : '<em class="gc free">free</em>'); });
+}; }
+{ const base = updHUD; updHUD = function () { base();
+  if ((S.state === 'aim' || S.state === 'intro') && $('shot')) { const g = clubGold(S.club); $('shot').insertAdjacentHTML('beforeend', ` <span>· ${g ? g + ' gold a shot' : 'free'}</span>`); }
+}; }
+// every visit to the hole starts with a small stipend, so you can never be stuck
+{ const base = start3D; start3D = function () {
+  C3.holeGold = 0; meta.gold += GOLD_STIPEND; saveMeta();
+  base(); showGold(GOLD_STIPEND); refreshAfford(); label(S.ball.x, S.ball.y, `+${GOLD_STIPEND} gold to start`, 1.6, false, 18);
+}; }
+{ const base = toAim; toAim = function () { base(); refreshAfford(); }; }
+
+// the end-of-hole card: what you earned, and a caddie's shop of permanent club upgrades
+showCard = function () {
+  const h = H(), s = S.scores[S.hole], L = S.holeLog[S.hole] || { total: 0 };
+  const rows = CLUBS.map((c, i) => { const lv = lvOf(c), max = lv >= UPGRADE_GOLD.length, cost = UPGRADE_GOLD[lv], can = !max && meta.gold >= cost;
+    return `<div class="srow"><div class="sid">${c.id}</div><div class="sinfo"><b>${c.name}</b><span class="slv">${LEVEL_NAMES[lv]} ${pips(lv)}</span><small>${statLine(c, lv)}</small><small>${clubGold(i) ? clubGold(i) + ' gold a shot' : 'Free to hit'}</small></div>
+      ${max ? '<span class="smax">Maxed</span>' : `<button class="sbuy" data-i="${i}" ${can ? '' : 'aria-disabled="true"'}><small>${LEVEL_NAMES[lv + 1]}</small>${cost} gold</button>`}</div>`; }).join('');
+  $('panel').innerHTML = `<p class="evn">3D prototype, Meadowbrook hole ${S.hole + 1}</p><h2>${scoreName(s - h.par, s)}</h2>
+    <p>${h.name} in ${s}, par ${h.par}. ${L.total ? L.total.toLocaleString() + ' points.' : ''}</p>
+    <div class="wallet"><small>${C3.holeGold >= 0 ? `+${C3.holeGold} gold this hole` : ''}</small><b id="wv">${meta.gold} gold</b></div>
+    <h3>Caddie's shop</h3><p class="perk">Upgrades are permanent: more carry, straighter, more spin. Prices per shot stay the same.</p>
+    <div class="shop">${rows}</div>
+    <button class="btn" id="again3">Play it again (+${GOLD_STIPEND} gold)</button>
+    <p class="ver"><a class="linkbtn" href="/desktop/">Back to the desktop edition</a> · <button class="linkbtn" id="fb3">Send feedback</button></p>`;
+  $('card').hidden = false; $('card').classList.remove('home');
+  $('again3').addEventListener('click', () => { sfx('tick'); start3D(); });
+  $('fb3').addEventListener('click', () => { sfx('tick'); showFeedback(showCard); });
+  [...$('panel').querySelectorAll('.sbuy')].forEach(b => b.addEventListener('click', () => { audioInit(); const c = CLUBS[+b.dataset.i], lv = lvOf(c), cost = UPGRADE_GOLD[lv];
+    if (meta.gold < cost) { b.classList.remove('nope'); void b.offsetWidth; b.classList.add('nope'); tone(160, .12, 'triangle', .1); return; }
+    meta.gold -= cost; meta.lv[c.id] = lv + 1; saveMeta(); blips(4); const y = $('card').scrollTop; showCard(); $('card').scrollTop = y; showGold(-cost); refreshChips(); }));
+};
+showGold(0);

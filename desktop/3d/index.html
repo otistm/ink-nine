@@ -37,6 +37,13 @@
 #viewBtn{position:fixed;right:28px;bottom:156px;z-index:6;appearance:none;border:2.5px solid var(--ink);border-radius:999px;background:var(--paper);color:var(--ink);box-shadow:3px 4px 0 var(--ink);font:800 13px var(--ui);padding:8px 14px;cursor:pointer;transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
 #viewBtn:hover{transform:translateY(-2px)}#viewBtn:active{transform:scale(1.08,.9)}#viewBtn:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
 #viewBtn kbd{margin:0 0 0 6px}
+#purse{display:flex;align-items:center;gap:6px;border:2.5px solid var(--ink);border-radius:999px;background:var(--paper);box-shadow:3px 4px 0 var(--ink);padding:4px 12px 4px 6px;height:38px;transform-origin:50% 60%}
+#purse i{width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ffe58a,#e2a92b 60%,#a8741a);border:2px solid var(--ink)}
+#purse b{font-family:var(--display);font-weight:900;font-size:22px;font-variant-numeric:tabular-nums}#purse small{font-weight:800;font-size:12px;color:var(--soft)}
+#purse.bump{animation:bump .45s ease-out}#purse.spend{animation:nope .3s}
+.club em.gc{position:absolute;right:-8px;top:-8px;font-style:normal;font:900 11px var(--ui);min-width:20px;height:20px;padding:0 5px;display:grid;place-items:center;border-radius:999px;border:2px solid var(--ink);background:#f0c23b;color:#141414}
+.club em.gc.free{background:var(--paper);color:var(--soft);font-size:9px;font-weight:800}
+.club.off em.gc{text-decoration:none}
 #bitPanel[hidden]{display:none}
 #bitPanel{position:fixed;left:28px;top:128px;z-index:6;width:224px;display:grid;gap:4px;border:2.5px solid var(--ink);border-radius:16px;background:var(--paper);box-shadow:3px 4px 0 var(--ink);padding:10px 14px 8px;font:700 12.5px var(--ui)}
 #bitPanel b{font-family:var(--display);font-style:italic;font-weight:900;font-size:16px}
@@ -58,6 +65,7 @@
     <div class="sub" id="dist"></div>
   </div>
   <div class="right">
+  <div class="purse" id="purse" aria-live="polite" title="Gold: earn it by playing well, spend it on better clubs"><i aria-hidden="true"></i><b id="goldv">0</b><small>gold</small></div>
   <div class="pts" aria-live="polite"><div class="pv" id="pv">0</div><div class="sub" id="streak">No streak</div></div>
   </div>
 </header>
