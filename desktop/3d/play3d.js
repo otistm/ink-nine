@@ -6,7 +6,7 @@
 "use strict";
 
 const P3_COURSE = 0, P3_HOLE = 2;
-const C3 = { style: 0, mode: 'aerial', span: 60, yaw: 0, zoom: 1, ready: false, pos: new THREE.Vector3(), look: new THREE.Vector3(), lastState: '', yawDrag: null };
+const C3 = { style: 9, mode: 'aerial', span: 60, yaw: 0, zoom: 1, ready: false, pos: new THREE.Vector3(), look: new THREE.Vector3(), lastState: '', yawDrag: null };
 let three = null;
 
 /* ---------- start straight on the hole; no saving, no online, no invitational ---------- */
@@ -224,7 +224,7 @@ const PALETTES = {
   'Pocket 4': ['0f380f', '306230', '8bac0f', '9bbc0f'],
   'Dusk 8': ['1b1029', '3d2149', '6b2f5b', 'a8435a', 'e0704c', 'f2b35e', 'f7e3a1', '5b7fa6']
 };
-const BIT = { px: 4, pal: 'Retro 16', d: .7 };
+const BIT = { px: 2, pal: 'Retro 16', d: .7 };
 const palUniform = name => { const a = []; for (let i = 0; i < 16; i++) { const hx = PALETTES[name][Math.min(i, PALETTES[name].length - 1)]; a.push(new THREE.Color('#' + hx)); } return a; };
 const POST_FS = `
 uniform sampler2D tColor, tDepth, bayer; uniform float style, cell, exposure, cn, cf, engI, engS, engO, bitPx, bitN, bitD; uniform vec3 pal[16]; uniform vec2 res; varying vec2 vUv;
@@ -657,7 +657,7 @@ addEventListener('keydown', e => { if ((e.key === 'v' || e.key === 'V') && $('ca
 $('lookhint').firstElementChild.textContent = 'The whole hole from above. Press Space to go back.';
 // styles: the arrows on screen or [ and ] step through them; remembered between visits
 function setStyle(i, quiet) {
-  C3.style = (i + STYLES.length) % STYLES.length; try { localStorage.setItem('inknine-style', String(C3.style)); } catch (_) {}
+  C3.style = (i + STYLES.length) % STYLES.length; try { localStorage.setItem('inknine-style2', String(C3.style)); } catch (_) {}
   if (three) three.post.material.uniforms.style.value = C3.style;
   $('styName').textContent = STYLES[C3.style].name; $('engPanel').hidden = STYLES[C3.style].name !== 'Engraving'; $('bitPanel').hidden = STYLES[C3.style].name !== '8-bit'; $('stylePick').setAttribute('aria-label', `Style: ${STYLES[C3.style].name}`);
   if (!quiet) { sfx('tick'); tone(500 + C3.style * 60, .12, 'sine', .06); callout(STYLES[C3.style].name, `Style ${C3.style + 1} of ${STYLES.length}`); }
@@ -667,7 +667,7 @@ $('styNext').addEventListener('click', () => { audioInit(); setStyle(C3.style + 
 addEventListener('keydown', e => { if (!$('card').hidden || e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === '[') { e.preventDefault(); $('styPrev').click(); }
   if (e.key === ']') { e.preventDefault(); $('styNext').click(); } });
-{ let i = 0; try { i = parseInt(localStorage.getItem('inknine-style') || '0', 10) || 0; } catch (_) {} setStyle(Math.max(0, Math.min(STYLES.length - 1, i)), true); }
+{ let i = STYLES.findIndex(st => st.name === '8-bit'); try { const v = localStorage.getItem('inknine-style2'); if (v !== null) i = parseInt(v, 10) || 0; } catch (_) {} setStyle(Math.max(0, Math.min(STYLES.length - 1, i)), true); }   // 8-bit unless you chose another
 
 // Engraving dials: sliders write straight into the shader; remembered between visits
 function setEng(quiet) {
@@ -686,11 +686,11 @@ function setBit(quiet) {
   if (three) { const u = three.post.material.uniforms; u.bitPx.value = BIT.px; u.bitD.value = BIT.d; u.bitN.value = PALETTES[BIT.pal].length; u.pal.value = palUniform(BIT.pal); }
   $('bitPx').value = BIT.px; $('bitD').value = BIT.d; $('bitPxv').textContent = BIT.px + ' px'; $('bitDv').textContent = Math.round(BIT.d * 100) + '%';
   [...document.querySelectorAll('#bitPals button')].forEach(b => { const on = b.dataset.p === BIT.pal; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
-  if (!quiet) try { localStorage.setItem('inknine-bit', JSON.stringify(BIT)); } catch (_) {}
+  if (!quiet) try { localStorage.setItem('inknine-bit2', JSON.stringify(BIT)); } catch (_) {}
 }
 $('bitPals').innerHTML = Object.keys(PALETTES).map(n => `<button type="button" data-p="${n}"><i>${PALETTES[n].slice(0, 8).map(h => `<s style="background:#${h}"></s>`).join('')}</i>${n}</button>`).join('');
 [...document.querySelectorAll('#bitPals button')].forEach(b => b.addEventListener('click', () => { BIT.pal = b.dataset.p; setBit(); sfx('tick'); b.blur(); }));
 $('bitPx').addEventListener('input', e => { BIT.px = parseFloat(e.target.value); setBit(); });
 $('bitD').addEventListener('input', e => { BIT.d = parseFloat(e.target.value); setBit(); });
-$('bitReset').addEventListener('click', () => { Object.assign(BIT, { px: 4, pal: 'Retro 16', d: .7 }); setBit(); sfx('tick'); });
-{ try { Object.assign(BIT, JSON.parse(localStorage.getItem('inknine-bit') || '{}')); } catch (_) {} if (!PALETTES[BIT.pal]) BIT.pal = 'Retro 16'; setBit(true); $('bitPanel').hidden = STYLES[C3.style].name !== '8-bit'; }
+$('bitReset').addEventListener('click', () => { Object.assign(BIT, { px: 2, pal: 'Retro 16', d: .7 }); setBit(); sfx('tick'); });
+{ try { Object.assign(BIT, JSON.parse(localStorage.getItem('inknine-bit2') || '{}')); } catch (_) {} if (!PALETTES[BIT.pal]) BIT.pal = 'Retro 16'; setBit(true); $('bitPanel').hidden = STYLES[C3.style].name !== '8-bit'; }
