@@ -631,6 +631,7 @@ function earn(n, why) {
 }; }
 { const base = bankHole; bankHole = function (score) {
   const first = !S.banked; base(score); if (!first) return;
+  meta.holeOpen = false; saveMeta();   // finished: the next hole pays its starting gold
   const d = score - H().par; earn(score === 1 ? 12 : d <= -2 ? 8 : d === -1 ? 4 : d === 0 ? 1 : 0, scoreName(d, score).toLowerCase());
 }; }
 // prices on the club chips (red when you can't cover them), and the price of the club in hand under the shot line
@@ -642,9 +643,13 @@ function earn(n, why) {
   if ((S.state === 'aim' || S.state === 'intro') && $('shot')) { const g = clubGold(S.club);
     $('shot').insertAdjacentHTML('beforeend', g > meta.gold ? ` <span class="credit">· ${g} gold: you're short, so it costs a stroke</span>` : ` <span>· ${g} gold</span>`); }
 }; }
-// each visit to the hole starts with a stipend of par + 2 gold
+// a new hole starts with a stipend of par + 2 gold, but only once the last one was finished:
+// reloading the page mid-hole restarts the hole without paying out again
 { const base = start3D; start3D = function () {
-  base(); C3.holeGold = stipend(); meta.gold += C3.holeGold; saveMeta(); showGold(C3.holeGold); refreshAfford(); label(S.ball.x, S.ball.y, `+${C3.holeGold} gold to start`, 1.6, false, 18);
+  base(); C3.holeGold = 0;
+  if (!meta.holeOpen) { C3.holeGold = stipend(); meta.gold += C3.holeGold; meta.holeOpen = true; saveMeta(); showGold(C3.holeGold); label(S.ball.x, S.ball.y, `+${C3.holeGold} gold to start`, 1.6, false, 18); }
+  else { showGold(0); label(S.ball.x, S.ball.y, 'Hole restarted: no starting gold', 1.6, false, 18); }
+  refreshAfford();
 }; }
 { const base = toAim; toAim = function () { base(); refreshAfford(); }; }
 
