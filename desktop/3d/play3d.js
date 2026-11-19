@@ -1,12 +1,12 @@
 /* Ink Nine 3D prototype: one hole (Meadowbrook 3, Long Way Round) played in 3D.
    The real game runs underneath: swing, tempo, curve, wind, physics, scoring and cards are the phone game's own.
-   This file only swaps how it is seen: a real 3D course in greyscale toon shading with thin black outlines, and the
-   2D game's animation (squash and stretch, anticipation, follow-through, springy camera, shake) carried into 3D.
+   This file only swaps how it is seen: a realistic 3D course shown in black and white, and the 2D game's animation
+   (squash and stretch, anticipation, follow-through, springy camera, shake) carried into 3D.
    Loaded after desk.js and Three.js, before main.js. */
 "use strict";
 
 const P3_COURSE = 0, P3_HOLE = 2;
-const C3 = { dither: false, mode: 'behind', span: 60, yaw: 0, zoom: 1, ready: false, pos: new THREE.Vector3(), look: new THREE.Vector3(), lastState: '', yawDrag: null };
+const C3 = { dither: false, colour: false, mode: 'behind', span: 60, yaw: 0, zoom: 1, ready: false, pos: new THREE.Vector3(), look: new THREE.Vector3(), lastState: '', yawDrag: null };
 let three = null;
 
 /* ---------- start straight on the hole; no saving, no online, no invitational ---------- */
@@ -55,10 +55,11 @@ function screenDirToWorld(sa) {
 { const base = startHole; startHole = function (i) { const h = HOLES[i]; C3.yaw = Math.atan2(h.cup[1] - h.tee[1], h.cup[0] - h.tee[0]); C3.zoom = 1; base(i); }; }
 
 /* ============================================================
-   THE LOOK: a real 3D course in greyscale toon shading.
-   Colour is removed, light falls into a few hard bands, things cast real shadows, and a thin black
-   outline is traced around every shape. Ball physics still runs on the game's own ground; the
-   bunkers, greens, tee and lake are shaped on top of it for the eye only.
+   THE LOOK: as real as we can make it. A real golf-course sky photo lights the scene, the ground uses
+   real grass and sand textures, hundreds of thousands of grass blades sway around the ball, trees are
+   grown branch by branch with real bark and thousands of leaves, and a final pass shows it in black and
+   white (or colour, or 1-bit dither). Ball physics still runs on the game's own ground; the bunkers,
+   greens, tee and lake are shaped on top of it for the eye only.
    ============================================================ */
 
 /* ---------- shaping the ground for the eye: dug bunkers with a lip, raised greens and tee, a sunken lake ---------- */
@@ -79,241 +80,345 @@ function shapeOffset(h, x, y) {
 }
 const groundY = (h, x, y) => zgAt(h, x, y) + shapeOffset(h, x, y);
 
-/* ---------- greyscale surfaces, painted once into a texture ---------- */
-// ppy: pixels per yard. lw: ink line width in yards (thin up close, a little heavier for the whole-hole texture).
-function paintGround(h, bb, ppy, lw) {
-  const w = Math.round((bb.x1 - bb.x0) * ppy), hgt = Math.round((bb.y1 - bb.y0) * ppy), A = (bb.x1 - bb.x0) * (bb.y1 - bb.y0);
-  const P = (x, y) => [(x - bb.x0) * ppy, (y - bb.y0) * ppy], d = holeDir(h), rnd = seeded(77);
-  // one scratch canvas, cleared and reused for every layer and outline (full-size canvases are heavy)
-  const scratch = document.createElement('canvas'); scratch.width = w; scratch.height = hgt; const sg = scratch.getContext('2d');
-  const cnv = (fn) => { sg.setTransform(1, 0, 0, 1, 0, 0); sg.globalCompositeOperation = 'source-over'; sg.globalAlpha = 1; sg.clearRect(0, 0, w, hgt); fn(sg); return scratch; };
-  const shapePath = (g, s, grow = 0) => {
-    if (s.t === 'e') { const [x, y] = P(s.x, s.y); g.beginPath(); g.ellipse(x, y, (s.rx + grow) * ppy, (s.ry + grow) * ppy, s.rot, 0, TAU); g.fill(); }
-    else if (s.t === 'c') { const pts = s.poly || s.pts; g.beginPath(); pts.forEach((p, i) => { const [x, y] = P(p[0], p[1]); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.lineWidth = 2 * (s.r + grow) * ppy; g.lineCap = g.lineJoin = 'round'; g.stroke(); }
-    else if (s.t === 'r') { const [x0, y0] = P(s.x0 - grow, s.y0 - grow), [x1, y1] = P(s.x1 + grow, s.y1 + grow); g.fillRect(x0, y0, x1 - x0, y1 - y0); }
-  };
-  // a layer = a mask of shapes, filled with its own painting
-  const layer = (main, shapes, grow, paint) => {
-    const c = cnv(g => { g.fillStyle = g.strokeStyle = '#000'; shapes.forEach(s => shapePath(g, s, grow)); g.globalCompositeOperation = 'source-in'; paint(g); });
-    main.drawImage(c, 0, 0);
-  };
-  const stripes = (g, base, alt, width, ang) => { g.fillStyle = base; g.fillRect(0, 0, w, hgt); g.save(); g.translate(w / 2, hgt / 2); g.rotate(ang); g.fillStyle = alt;
-    const L = Math.hypot(w, hgt), bw = width * ppy; for (let x = -L; x < L; x += bw * 2) g.fillRect(x, -L, bw, L * 2); g.restore(); };
-  // ink: the outline of a group of shapes, traced just outside their edge (their union, so overlaps don't double up)
-  const outline = (main, shapes, dash) => {
-    if (!lw) return;   // dithered mode draws no lines at all
-    const c = cnv(g => { g.fillStyle = g.strokeStyle = '#141414'; shapes.forEach(s => shapePath(g, s, lw)); g.globalCompositeOperation = 'destination-out'; shapes.forEach(s => shapePath(g, s, 0));
-      if (dash) { g.globalCompositeOperation = 'destination-out'; g.save(); g.translate(w / 2, hgt / 2); g.rotate(.7); const L = Math.hypot(w, hgt), st = dash * ppy; for (let x = -L; x < L; x += st * 2) g.fillRect(x, -L, st, L * 2); g.restore(); } });
-    main.drawImage(c, 0, 0);
-  };
-  // grain as a small repeating tile (16 yards across), so painting stays quick at any size
-  const speckle = (g, perYd2, cols, size, base) => { const T = Math.max(8, Math.round(16 * ppy)), tc = document.createElement('canvas'); tc.width = tc.height = T; const tg = tc.getContext('2d');
-    if (base) { tg.fillStyle = base; tg.fillRect(0, 0, T, T); } for (let i = 0; i < 256 * perYd2; i++) { tg.fillStyle = cols[(rnd() * cols.length) | 0]; tg.beginPath(); tg.arc(rnd() * T, rnd() * T, size * (.3 + rnd() * .4), 0, TAU); tg.fill(); }
-    g.fillStyle = g.createPattern(tc, 'repeat'); g.fillRect(0, 0, w, hgt); };
+/* ---------- real assets (CC0, Poly Haven), loaded once ---------- */
+const ASSET = '/desktop/3d/assets/';
+const texLoader = new THREE.TextureLoader();
+function assetTex(path, srgb) { const t = texLoader.load(ASSET + path); t.wrapS = t.wrapT = THREE.RepeatWrapping; if (srgb) t.encoding = THREE.sRGBEncoding; t.anisotropy = 8; return t; }
+const TEX = {
+  grass: assetTex('aerial_grass_rock/aerial_grass_rock_diff_1k.jpg', true), grassN: assetTex('aerial_grass_rock/aerial_grass_rock_nor_gl_1k.jpg'), grassR: assetTex('aerial_grass_rock/aerial_grass_rock_rough_1k.jpg'),
+  sand: assetTex('aerial_sand/aerial_sand_diff_1k.jpg', true), sandN: assetTex('aerial_sand/aerial_sand_nor_gl_1k.jpg'),
+  bark: assetTex('bark_willow/bark_willow_diff_1k.jpg', true), barkN: assetTex('bark_willow/bark_willow_nor_gl_1k.jpg')
+};
+
+/* ---------- the splat map: which surface is where, painted from the game's own shapes ----------
+   R = how lush and light the grass is (rough darkest, green lightest, mowing stripes, shade under trees)
+   G = sand, B = short-mown grass. Water is its own surface. */
+function paintSplat(h, bb, ppy) {
+  const w = Math.round((bb.x1 - bb.x0) * ppy), hgt = Math.round((bb.y1 - bb.y0) * ppy), d = holeDir(h);
+  const P = (x, y) => [(x - bb.x0) * ppy, (y - bb.y0) * ppy];
   const out = document.createElement('canvas'); out.width = w; out.height = hgt; const g = out.getContext('2d');
-  {
-    g.fillStyle = '#b9b9b9'; g.fillRect(0, 0, w, hgt);
-    speckle(g, 1.1, ['#adadad', '#c6c6c6', '#a6a6a6', '#cdcdcd'], .5 * ppy, '#b9b9b9');       // rough
-    layer(g, h.fair, 1.6, g2 => { g2.fillStyle = '#c9c9c9'; g2.fillRect(0, 0, w, hgt); });        // first cut
-    layer(g, h.fair, 0, g2 => { stripes(g2, '#dcdcdc', '#d0d0d0', 7, d); }); outline(g, h.fair);                 // mown fairway
-    layer(g, h.water, 0, g2 => { g2.fillStyle = '#7d7d7d'; g2.fillRect(0, 0, w, hgt); }); outline(g, h.water);    // lake bed
-    const fringe = h.green.map(s => ({ ...s, rx: s.rx + 1.6, ry: s.ry + 1.6 }));
-    layer(g, fringe, 0, g2 => { g2.fillStyle = '#d3d3d3'; g2.fillRect(0, 0, w, hgt); }); outline(g, fringe, .7);   // fringe, dashed edge
-    layer(g, h.green, 0, g2 => { stripes(g2, '#efefef', '#e6e6e6', 1.6, d + Math.PI / 4); }); outline(g, h.green); // green
-    layer(g, h.sand, 0, g2 => { speckle(g2, 2.5, ['#dcdcdc', '#e6e6e6'], .35 * ppy, '#f1f1f1'); }); outline(g, h.sand);
-    layer(g, [TEE_RECT(h)], 0, g2 => { stripes(g2, '#e6e6e6', '#dedede', 1.2, d + Math.PI / 2); }); outline(g, [TEE_RECT(h)]);
-  }
+  const scratch = document.createElement('canvas'); scratch.width = w; scratch.height = hgt; const sg = scratch.getContext('2d');
+  const shapePath = (c, s, grow = 0) => {
+    if (s.t === 'e') { const [x, y] = P(s.x, s.y); c.beginPath(); c.ellipse(x, y, (s.rx + grow) * ppy, (s.ry + grow) * ppy, s.rot, 0, TAU); c.fill(); }
+    else if (s.t === 'c') { const pts = s.poly || s.pts; c.beginPath(); pts.forEach((p, i) => { const [x, y] = P(p[0], p[1]); i ? c.lineTo(x, y) : c.moveTo(x, y); }); c.lineWidth = 2 * (s.r + grow) * ppy; c.lineCap = c.lineJoin = 'round'; c.stroke(); }
+    else if (s.t === 'r') { const [x0, y0] = P(s.x0 - grow, s.y0 - grow), [x1, y1] = P(s.x1 + grow, s.y1 + grow); c.fillRect(x0, y0, x1 - x0, y1 - y0); }
+  };
+  const stripes = (c, a, b, width, ang) => { c.fillStyle = a; c.fillRect(0, 0, w, hgt); c.save(); c.translate(w / 2, hgt / 2); c.rotate(ang); c.fillStyle = b;
+    const L = Math.hypot(w, hgt), bw = width * ppy; for (let x = -L; x < L; x += bw * 2) c.fillRect(x, -L, bw, L * 2); c.restore(); };
+  // a layer: mask of shapes (softened at the edge by a blur), filled with its own paint
+  const layer = (shapes, grow, soft, paint) => {
+    sg.setTransform(1, 0, 0, 1, 0, 0); sg.globalCompositeOperation = 'source-over'; sg.clearRect(0, 0, w, hgt); sg.filter = soft ? `blur(${soft * ppy}px)` : 'none';
+    sg.fillStyle = sg.strokeStyle = '#000'; shapes.forEach(s => shapePath(sg, s, grow)); sg.filter = 'none'; sg.globalCompositeOperation = 'source-in'; paint(sg); g.drawImage(scratch, 0, 0);
+  };
+  g.fillStyle = 'rgb(150,0,0)'; g.fillRect(0, 0, w, hgt);                                      // rough
+  layer(h.fair, 1.8, .6, c => { c.fillStyle = 'rgb(178,0,90)'; c.fillRect(0, 0, w, hgt); });     // first cut
+  layer(h.fair, 0, .25, c => stripes(c, 'rgb(212,0,255)', 'rgb(196,0,255)', 7, d));             // fairway, mown in stripes
+  const fringe = h.green.map(s => ({ ...s, rx: s.rx + 1.6, ry: s.ry + 1.6 }));
+  layer(fringe, 0, .3, c => { c.fillStyle = 'rgb(214,0,255)'; c.fillRect(0, 0, w, hgt); });
+  layer(h.green, 0, .2, c => stripes(c, 'rgb(236,0,255)', 'rgb(226,0,255)', 2.2, d + Math.PI / 2)); // green
+  layer([TEE_RECT(h)], 0, .2, c => stripes(c, 'rgb(220,0,255)', 'rgb(208,0,255)', 1.4, d + Math.PI / 2));
+  layer(h.sand, 0, .15, c => { c.fillStyle = 'rgb(200,255,0)'; c.fillRect(0, 0, w, hgt); });
+  // soft shade on the grass under each tree's crown
+  g.globalCompositeOperation = 'multiply';
+  h.trees.forEach(tr => { const [x, y] = P(tr[0], tr[1]), rr = tr[2] * 1.3 * ppy, gr = g.createRadialGradient(x, y, 0, x, y, rr);
+    gr.addColorStop(0, 'rgb(150,255,255)'); gr.addColorStop(1, 'rgb(255,255,255)'); g.fillStyle = gr; g.beginPath(); g.arc(x, y, rr, 0, TAU); g.fill(); });
+  g.globalCompositeOperation = 'source-over';
   return out;
 }
-function noiseTile() { // fine grain laid over the ground near the camera, so it never looks smeared
-  const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'), r = seeded(5);
-  g.fillStyle = '#fff'; g.fillRect(0, 0, 256, 256);
-  for (let i = 0; i < 2600; i++) { const v = 150 + (r() * 105) | 0; g.fillStyle = `rgb(${v},${v},${v})`; const x = r() * 256, y = r() * 256; g.fillRect(x, y, 1.4, 3 + r() * 4); }
-  return c;
-}
 
-/* ---------- toon materials: hard light bands, real shadows ---------- */
-const TOON_RAMP = (() => { const t = new THREE.DataTexture(new Uint8Array([55, 55, 55, 55, 55, 55, 150, 150, 150, 255, 255, 255]), 4, 1, THREE.RGBFormat);
-  t.minFilter = t.magFilter = THREE.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true; return t; })();
-const toon = (color, extra) => new THREE.MeshToonMaterial(Object.assign({ color, gradientMap: TOON_RAMP }, extra || {}));
-// lets a toon material know where it is in the world (for ground grain and moving water)
-function worldAware(mat, fragAfterMap, uniforms) {
+/* ---------- materials that know where they are in the world ---------- */
+function worldAware(mat, opts) {
   mat.onBeforeCompile = sh => {
-    Object.assign(sh.uniforms, uniforms);
-    sh.vertexShader = 'varying vec3 vWp;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvWp = (modelMatrix * vec4(transformed, 1.)).xyz;');
-    sh.fragmentShader = 'varying vec3 vWp;\n' + Object.keys(uniforms).map(k => `uniform ${uniforms[k].type} ${k};`).join('\n') + '\n' + sh.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\n' + fragAfterMap);
+    Object.assign(sh.uniforms, opts.uniforms || {});
+    const decl = Object.entries(opts.uniforms || {}).map(([k, u]) => `uniform ${u.type} ${k};`).join('\n');
+    sh.vertexShader = 'varying vec3 vWp;\n' + decl + '\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n' + (opts.vertex || '') +
+      '\n#ifdef USE_INSTANCING\n vWp = (modelMatrix * instanceMatrix * vec4(transformed, 1.)).xyz;\n#else\n vWp = (modelMatrix * vec4(transformed, 1.)).xyz;\n#endif');
+    sh.fragmentShader = 'varying vec3 vWp;\n' + decl + '\n' + sh.fragmentShader
+      .replace('#include <map_fragment>', '#include <map_fragment>\n' + (opts.afterMap || ''))
+      .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + (opts.afterNormal || ''))
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n' + (opts.afterRough || ''));
   };
   return mat;
 }
+const U = { time: { value: 0, type: 'float' }, wind: { value: new THREE.Vector2(), type: 'vec2' } };   // shared by grass, leaves and water
 
-/* ---------- 8x8 Bayer threshold map for the dithering ---------- */
+/* ---------- grass: hundreds of thousands of real blades around the ball, swaying in the wind ---------- */
+function bladeGeometry() {
+  const segs = 4, pos = [], nrm = [], idx = [];
+  for (let i = 0; i <= segs; i++) { const t = i / segs, w = .045 * (1 - t * .9), z = t * t * .3; pos.push(-w, t, z, w, t, z); nrm.push(0, 1, 0, 0, 1, 0); }
+  for (let i = 0; i < segs; i++) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3)); g.setIndex(idx); return g;
+}
+const GRASS_MAX = 320000;
+function grassMesh() {
+  const mat = worldAware(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .85, side: THREE.DoubleSide }), { uniforms: U,
+    vertex: 'float hgt = position.y * position.y; vec3 ip = vec3(instanceMatrix[3].x, 0., instanceMatrix[3].z);\n' +
+      'float gust = sin(time * 1.7 + ip.x * .23 + ip.z * .19) * .5 + .5;\n' +
+      'transformed.x += (sin(time * 3.1 + ip.x * 1.7 + ip.z * 1.3) * .18 + wind.x * (.4 + gust)) * hgt;\n' +
+      'transformed.z += (cos(time * 2.7 + ip.z * 1.9) * .14 + wind.y * (.4 + gust)) * hgt;' });
+  const im = new THREE.InstancedMesh(bladeGeometry(), mat, GRASS_MAX); im.count = 0; im.frustumCulled = false; im.receiveShadow = true;
+  im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(GRASS_MAX * 3), 3);
+  return im;
+}
+function growGrass(cx, cy) {
+  const T = three, h = H(), im = T.grass, m = im.instanceMatrix.array, col = im.instanceColor.array, rnd = seeded(Math.abs(Math.round(cx * 31 + cy * 17)) % 99991 + 7), R = 42;
+  let n = 0;
+  for (let k = 0; k < 520000 && n < GRASS_MAX; k++) {
+    const x = cx + (rnd() * 2 - 1) * R, y = cy + (rnd() * 2 - 1) * R, dd = Math.hypot(x - cx, y - cy); if (dd > R) continue;
+    const s = surfaceAt(h, x, y); let ht;
+    if (s === 'rough') ht = .09 + rnd() * .11;
+    else if ((s === 'fairway' || s === 'fringe' || s === 'tee') && dd < 14) ht = .028 + rnd() * .018;
+    else continue;
+    const a = rnd() * TAU, c = Math.cos(a), sn = Math.sin(a), sc = ht, o = n * 16;
+    m[o] = c * sc; m[o + 1] = 0; m[o + 2] = -sn * sc; m[o + 3] = 0; m[o + 4] = 0; m[o + 5] = sc; m[o + 6] = 0; m[o + 7] = 0;
+    m[o + 8] = sn * sc; m[o + 9] = 0; m[o + 10] = c * sc; m[o + 11] = 0; m[o + 12] = x; m[o + 13] = groundY(h, x, y); m[o + 14] = y; m[o + 15] = 1;
+    const dry = rnd(), v = .75 + rnd() * .5;   // greens with a few dry, straw-coloured blades
+    col[n * 3] = (dry > .93 ? .42 : .12 + rnd() * .08) * v; col[n * 3 + 1] = (dry > .93 ? .38 : .26 + rnd() * .1) * v; col[n * 3 + 2] = (dry > .93 ? .16 : .05 + rnd() * .04) * v;
+    n++;
+  }
+  im.count = n; im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true;
+}
+
+/* ---------- trees: grown branch by branch with real bark, thousands of leaves each ---------- */
+function leafAtlas() {   // four sprigs of leaves drawn with veins, on a transparent background
+  const c = document.createElement('canvas'); c.width = c.height = 512; const g = c.getContext('2d'), r = seeded(41);
+  for (let cell = 0; cell < 4; cell++) {
+    const ox = (cell % 2) * 256, oy = ((cell / 2) | 0) * 256; g.save(); g.translate(ox + 128, oy + 236);
+    g.strokeStyle = '#3d2f1c'; g.lineWidth = 3; g.beginPath(); g.moveTo(0, 0); g.quadraticCurveTo(8, -110, 0, -210); g.stroke();
+    for (let i = 0; i < 9; i++) {
+      const t = .15 + i / 9 * .85, y = -210 * t, side = i % 2 ? 1 : -1, ang = side * (.7 + r() * .4) - .2 * side, len = 60 + r() * 34;
+      const hue = 85 + r() * 30, light = 22 + r() * 16; g.save(); g.translate(4 * Math.sin(t * 3), y); g.rotate(ang);
+      g.fillStyle = `hsl(${hue},${45 + r() * 20}%,${light}%)`; g.beginPath(); g.moveTo(0, 0); g.bezierCurveTo(len * .35, -len * .22, len * .8, -len * .16, len, 0); g.bezierCurveTo(len * .8, len * .16, len * .35, len * .22, 0, 0); g.fill();
+      g.strokeStyle = `hsla(${hue},40%,${light + 14}%,.8)`; g.lineWidth = 1.4; g.beginPath(); g.moveTo(0, 0); g.lineTo(len * .92, 0); g.stroke(); g.restore();
+    }
+    g.restore();
+  }
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8; return t;
+}
+function mergeGeos(parts) {   // parts: {pos, nrm, uv, idx}
+  const pos = [], nrm = [], uv = [], idx = []; let base = 0;
+  parts.forEach(p => { pos.push(...p.pos); nrm.push(...p.nrm); uv.push(...p.uv); p.idx.forEach(i => idx.push(i + base)); base += p.pos.length / 3; });
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); return g;
+}
+function treeVariant(seed) {   // a tree of crown radius 1, trunk base at the origin
+  const r = seeded(seed), bark = [], leaves = [], up = new THREE.Vector3(0, 1, 0), crownC = new THREE.Vector3(0, 1.4, 0);
+  const tube = (a, b, r0, r1) => {   // a tapered, slightly gnarled limb from a to b
+    const dir = b.clone().sub(a), len = dir.length(); dir.normalize();
+    const side = Math.abs(dir.y) < .99 ? new THREE.Vector3().crossVectors(dir, up).normalize() : new THREE.Vector3(1, 0, 0), side2 = new THREE.Vector3().crossVectors(dir, side);
+    const S = 9, p = { pos: [], nrm: [], uv: [], idx: [] };
+    [0, 1].forEach(e => { const c = e ? b : a, rad = e ? r1 : r0; for (let i = 0; i <= S; i++) { const t = i / S * TAU, n = side.clone().multiplyScalar(Math.cos(t)).addScaledVector(side2, Math.sin(t)), wob = 1 + .12 * Math.sin(t * 3 + seed);
+      p.pos.push(c.x + n.x * rad * wob, c.y + n.y * rad * wob, c.z + n.z * rad * wob); p.nrm.push(n.x, n.y, n.z); p.uv.push(i / S * 2, e * len * 2.2); } });
+    for (let i = 0; i < S; i++) p.idx.push(i, i + S + 1, i + 1, i + 1, i + S + 1, i + S + 2);
+    bark.push(p);
+  };
+  const cluster = (c, size, count) => {
+    for (let k = 0; k < count; k++) {
+      const q = new THREE.Vector3(r() * 2 - 1, r() * 2 - 1, r() * 2 - 1); if (q.lengthSq() > 1) { k--; continue; }
+      const ctr = c.clone().addScaledVector(q, size), sz = .17 + r() * .1, n = ctr.clone().sub(crownC).normalize();
+      const ax = new THREE.Vector3(r() - .5, r() - .5, r() - .5).normalize(), ay = new THREE.Vector3().crossVectors(ax, n).normalize().multiplyScalar(sz);
+      const bx = ax.clone().multiplyScalar(sz), cell = (r() * 4) | 0, u0 = (cell % 2) * .5, v0 = ((cell / 2) | 0) * .5;
+      const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]], p = { pos: [], nrm: [], uv: [], idx: [0, 1, 2, 0, 2, 3] };
+      corners.forEach(([i, j]) => { p.pos.push(ctr.x + bx.x * i + ay.x * j, ctr.y + bx.y * i + ay.y * j, ctr.z + bx.z * i + ay.z * j); p.nrm.push(n.x, n.y, n.z); p.uv.push(u0 + (i + 1) * .25, 1 - (v0 + (1 - j) * .25)); });
+      leaves.push(p);
+    }
+  };
+  const grow = (a, dir, len, rad, depth) => {
+    const b = a.clone().addScaledVector(dir, len); tube(a, b, rad, rad * .7);
+    if (depth === 0) { cluster(b, .3 + r() * .1, 46); return; }
+    const n = depth >= 3 ? 3 + (r() < .4 ? 1 : 0) : 2 + (r() < .5 ? 1 : 0);
+    for (let k = 0; k < n; k++) {
+      const spread = .45 + r() * .45, az = k / n * TAU + r() * 1.2, out = new THREE.Vector3(Math.cos(az), 0, Math.sin(az));
+      const nd = dir.clone().multiplyScalar(Math.cos(spread)).addScaledVector(out, Math.sin(spread)).add(new THREE.Vector3(0, .25, 0)).normalize();
+      grow(b, nd, len * (.62 + r() * .16), rad * .66, depth - 1);
+    }
+    if (depth <= 2) cluster(a.clone().lerp(b, .7), .22, 14);
+  };
+  grow(new THREE.Vector3(0, 0, 0), new THREE.Vector3((r() - .5) * .1, 1, (r() - .5) * .1).normalize(), .78, .11, 4);
+  return { bark: mergeGeos(bark), leaves: mergeGeos(leaves) };
+}
+
+/* ---------- render target and the final pass: exposure, filmic tone, then colour, grey or 1-bit dither ---------- */
 const BAYER = (() => { const m = [[0]]; let M = m;
   for (let n = 1; n < 8; n *= 2) { const N = []; for (let y = 0; y < n * 2; y++) { N.push([]); for (let x = 0; x < n * 2; x++) N[y].push(4 * M[y % n][x % n] + [[0, 2], [3, 1]][(y / n) | 0][(x / n) | 0]); } M = N; }
   const d = new Uint8Array(64 * 3); for (let i = 0; i < 64; i++) { const v = Math.round((M[(i / 8) | 0][i % 8] + .5) / 64 * 255); d[i * 3] = d[i * 3 + 1] = d[i * 3 + 2] = v; }
   const t = new THREE.DataTexture(d, 8, 8, THREE.RGBFormat); t.minFilter = t.magFilter = THREE.NearestFilter; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.generateMipmaps = false; t.needsUpdate = true; return t; })();
-
-/* ---------- outline pass: depth and normal edges, traced thin and black, fading into the haze ---------- */
-const EDGE_VS = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }';
-const EDGE_FS = `
-uniform sampler2D tColor, tNormal, tDepth, bayer; uniform vec2 res; uniform float cn, cf, fogNear, fogFar, dither, cell; varying vec2 vUv;
-float vz(vec2 uv){ float d = texture2D(tDepth, uv).x; return cn * cf / (cf - d * (cf - cn)); }
-vec3 nrm(vec2 uv){ return texture2D(tNormal, uv).xyz * 2. - 1.; }
+const POST_VS = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }';
+const POST_FS = `
+uniform sampler2D tColor, bayer; uniform float mode, cell, exposure, seed; varying vec2 vUv;
+vec3 aces(vec3 x){ return clamp((x * (2.51 * x + .03)) / (x * (2.43 * x + .59) + .14), 0., 1.); }
+float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233)) + seed) * 43758.5453); }
 void main(){
-  vec2 p = 1. / res; float c = vz(vUv);
-  float l = vz(vUv - vec2(p.x, 0.)), r = vz(vUv + vec2(p.x, 0.)), u = vz(vUv + vec2(0., p.y)), d = vz(vUv - vec2(0., p.y));
-  float lap = abs(l + r + u + d - 4. * c) / c;
-  float ed = smoothstep(.02, .06, lap);
-  vec3 n = nrm(vUv); float nd = max(max(1. - dot(n, nrm(vUv - vec2(p.x, 0.))), 1. - dot(n, nrm(vUv + vec2(p.x, 0.)))), max(1. - dot(n, nrm(vUv + vec2(0., p.y))), 1. - dot(n, nrm(vUv - vec2(0., p.y)))));
-  float en = smoothstep(.18, .4, nd);
-  float e = max(ed, en) * (1. - smoothstep(fogNear, fogFar, c)) * (1. - dither);   // dithered mode: no outlines
-  vec3 col = texture2D(tColor, vUv).rgb * (1. - e * .92);
-  if (dither > .5) {   // 1-bit: every pixel pure black or white, greys become an ordered (Bayer) dot pattern
-    float l = dot(col, vec3(.299, .587, .114));
-    l = clamp((l - .5) * 1.3 + .57, 0., 1.);
-    float t = texture2D(bayer, gl_FragCoord.xy / (8. * cell)).r;
-    col = vec3(step(t, l));
-  }
-  gl_FragColor = vec4(col, 1.);
+  vec3 c = aces(texture2D(tColor, vUv).rgb * exposure);
+  c = pow(c, vec3(1. / 2.2));
+  vec2 q = vUv - .5; c *= 1. - dot(q, q) * .35;                         // a soft lens vignette
+  if (mode > .5) { float l = dot(c, vec3(.2126, .7152, .0722)); c = vec3(l); }
+  if (mode > 1.5) { float l = clamp((c.r - .5) * 1.25 + .52, 0., 1.); float t = texture2D(bayer, gl_FragCoord.xy / (8. * cell)).r; c = vec3(step(t, l)); }
+  else c += (hash(gl_FragCoord.xy) - .5) * .025;                         // fine film grain
+  gl_FragColor = vec4(c, 1.);
 }`;
 function makeTargets() {
-  const w = Math.round(W * DPR), hh = Math.round(Hh * DPR), mk = () => { const t = new THREE.WebGLRenderTarget(w, hh); t.depthTexture = new THREE.DepthTexture(w, hh); t.depthTexture.type = THREE.UnsignedIntType; return t; };
-  if (three.rtC) { three.rtC.dispose(); three.rtN.dispose(); }
-  three.rtC = mk(); three.rtN = mk();
-  const u = three.edge.material.uniforms; u.cell.value = 2 * DPR; u.tColor.value = three.rtC.texture; u.tDepth.value = three.rtC.depthTexture; u.tNormal.value = three.rtN.texture; u.res.value.set(w, hh);
+  const w = Math.round(W * DPR), hh = Math.round(Hh * DPR), opts = { type: THREE.HalfFloatType };
+  if (three.rt) three.rt.dispose();
+  three.rt = three.renderer.capabilities.isWebGL2 && THREE.WebGLMultisampleRenderTarget ? new THREE.WebGLMultisampleRenderTarget(w, hh, opts) : new THREE.WebGLRenderTarget(w, hh, opts);
+  if (three.rt.samples !== undefined) three.rt.samples = 4;
+  const u = three.post.material.uniforms; u.tColor.value = three.rt.texture; u.cell.value = 2 * DPR;
 }
+const styleMode = () => C3.dither ? 2 : C3.colour ? 0 : 1;
 
-/* ---------- pieces of the course ---------- */
-function tuftGeometry() { // three blades of grass leaning out from a point
-  const pos = [];
-  for (let k = 0; k < 3; k++) { const a = k / 3 * TAU + .3, c = Math.cos(a), s = Math.sin(a), lean = .08;
-    pos.push(-.04 * s, 0, .04 * c, .04 * s, 0, -.04 * c, c * lean, .34 - k * .04, s * lean); }
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals(); return g;
+/* ---------- the sky: a real golf course HDR photo lights the scene; the sun is found in it ---------- */
+function halfToFloat(h) { const s = (h & 0x8000) ? -1 : 1, e = (h >> 10) & 31, f = h & 1023; return e === 0 ? s * Math.pow(2, -14) * f / 1024 : e === 31 ? (f ? NaN : s * Infinity) : s * Math.pow(2, e - 15) * (1 + f / 1024); }
+function loadSky() {
+  if (!THREE.RGBELoader) return;
+  new THREE.RGBELoader().setDataType(THREE.HalfFloatType).load(ASSET + 'sky/limpopo_golf_course_2k.hdr', t => {
+    const T = three; t.mapping = THREE.EquirectangularReflectionMapping;
+    const pm = new THREE.PMREMGenerator(T.renderer); T.envMap = pm.fromEquirectangular(t).texture; pm.dispose();
+    // find the sun: the brightest patch in the sky half of the photo
+    const { data, width: w, height: hh } = t.image; let best = 0, bi = 0, hz = [0, 0, 0], hn = 0;
+    for (let y = 0; y < hh / 2; y += 2) for (let x = 0; x < w; x += 2) { const i = (y * w + x) * 4, l = halfToFloat(data[i]) * .2126 + halfToFloat(data[i + 1]) * .7152 + halfToFloat(data[i + 2]) * .0722; if (l > best) { best = l; bi = y * w + x; } }
+    for (let x = 0; x < w; x += 4) { const i = ((hh / 2 - 6 | 0) * w + x) * 4; hz[0] += halfToFloat(data[i]); hz[1] += halfToFloat(data[i + 1]); hz[2] += halfToFloat(data[i + 2]); hn++; }
+    const u = (bi % w) / w, v = 1 - Math.floor(bi / w) / hh, th = (u - .5) * TAU, ph = (v - .5) * Math.PI;
+    T.sunDir = new THREE.Vector3(Math.cos(ph) * Math.cos(th), Math.sin(ph), Math.cos(ph) * Math.sin(th)).normalize();
+    if (T.sunDir.y < .25) { T.sunDir.y = .25; T.sunDir.normalize(); }
+    T.sky = t; T.haze = new THREE.Color(hz[0] / hn, hz[1] / hn, hz[2] / hn);
+    applySky();
+  });
 }
-function lumpy(seed, detail) {
-  const geo = new THREE.IcosahedronGeometry(1, detail || 3), p = geo.attributes.position, r = seeded(seed), a = r() * 9, b = r() * 9, c = r() * 9, v = new THREE.Vector3();
-  for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i).normalize();
-    const k = 1 + .1 * Math.sin(v.x * 6 + a) * Math.sin(v.y * 6 + b) * Math.sin(v.z * 6 + c) + .05 * Math.sin(v.x * 13 + b) * Math.sin(v.z * 11 + a);
-    p.setXYZ(i, v.x * k, v.y * k, v.z * k); }
-  geo.computeVertexNormals(); return geo;
-}
-function makeTree(tr, i, h, mats) {
-  const [x, y, r] = tr, gz = groundY(h, x, y), rnd = seeded(500 + i * 31), g = new THREE.Group(); g.position.set(x, gz, y);
-  const sway = new THREE.Group(); g.add(sway);
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(r * .07, r * .12, r * 1.15, 8), mats.bark); trunk.position.y = r * .57; sway.add(trunk);
-  for (let k = 0; k < 3; k++) { const a = rnd() * TAU, br = new THREE.Mesh(new THREE.CylinderGeometry(r * .025, r * .045, r * .55, 6), mats.bark);
-    br.position.set(Math.cos(a) * r * .14, r * (.85 + rnd() * .2), Math.sin(a) * r * .14); br.rotation.set(Math.sin(a) * .7, 0, -Math.cos(a) * .7); sway.add(br); }
-  const crown = new THREE.Group(); crown.position.y = r * 1.45; sway.add(crown);
-  const blobs = [[0, 0, 0, .72], [.42, -.12, .1, .5], [-.38, -.1, -.22, .52], [.05, .32, -.05, .5], [-.12, -.18, .42, .46], [.22, .05, -.42, .44]];
-  blobs.forEach(([bx, by, bz, s], k) => { const m = new THREE.Mesh(lumpy(i * 13 + k, 3), mats.leaf); m.position.set(bx * r, by * r, bz * r); m.scale.set(s * r, s * r * .9, s * r); m.rotation.set(rnd() * 3, rnd() * 3, 0); crown.add(m); });
-  g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-  g.userData = { sway, h: r * 1.6, phase: i * 1.7 };
-  return g;
+function applySky() {
+  const T = three; if (!T || !T.scene || !T.envMap) return;
+  T.scene.environment = T.envMap; T.scene.background = T.sky;
+  const m = Math.max(T.haze.r, T.haze.g, T.haze.b) || 1; T.scene.fog = new THREE.FogExp2(T.haze.clone().multiplyScalar(.9 / m), .0011);
 }
 
 /* ---------- building the scene. Three.js axes: X = game x, Y = height, Z = game y ---------- */
 function build3D(h) {
   if (three && three.hole === h) return;
   if (!three) {
-    const renderer = new THREE.WebGLRenderer({ canvas: $('c3'), antialias: false });
-    renderer.setPixelRatio(DPR); renderer.setSize(W, Hh, false); renderer.setClearColor(0xffffff);
-    renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap; renderer.shadowMap.autoUpdate = false;
-    const edge = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ vertexShader: EDGE_VS, fragmentShader: EDGE_FS, depthTest: false, depthWrite: false,
-      uniforms: { tColor: { value: null }, tNormal: { value: null }, tDepth: { value: null }, res: { value: new THREE.Vector2() }, cn: { value: .3 }, cf: { value: 5000 }, fogNear: { value: 300 }, fogFar: { value: 1500 },
-        bayer: { value: BAYER }, dither: { value: C3.dither ? 1 : 0 }, cell: { value: 2 * DPR } } }));
-    const edgeScene = new THREE.Scene(); edgeScene.add(edge);
-    three = { renderer, camera: new THREE.PerspectiveCamera(50, W / Hh, .3, 5000), edge, edgeScene, edgeCam: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), normalMat: new THREE.MeshNormalMaterial({ side: THREE.DoubleSide }) };
-    makeTargets();
+    const renderer = new THREE.WebGLRenderer({ canvas: $('c3'), antialias: false, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(DPR); renderer.setSize(W, Hh, false);
+    renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.shadowMap.autoUpdate = false;
+    const post = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ vertexShader: POST_VS, fragmentShader: POST_FS, depthTest: false, depthWrite: false,
+      uniforms: { tColor: { value: null }, bayer: { value: BAYER }, mode: { value: styleMode() }, cell: { value: 2 * DPR }, exposure: { value: .82 }, seed: { value: 0 } } }));
+    const postScene = new THREE.Scene(); postScene.add(post);
+    three = { renderer, camera: new THREE.PerspectiveCamera(48, W / Hh, .05, 12000), post, postScene, postCam: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1),
+      sunDir: new THREE.Vector3(-.4, .75, .5).normalize(), haze: new THREE.Color(.75, .8, .85) };
+    makeTargets(); loadSky();
+    const an = renderer.capabilities.getMaxAnisotropy(); Object.values(TEX).forEach(t => { t.anisotropy = an; });
   }
-  const scene = new THREE.Scene(); three.scene = scene; three.hole = h;
-  scene.background = new THREE.Color(0xffffff); scene.fog = new THREE.Fog(0xffffff, 300, 1500);
-  const bb = staticBounds(h, 110), aniso = three.renderer.capabilities.getMaxAnisotropy(); three.bb = bb;
-  // light: a strong low-ish sun behind the player's left shoulder, a little sky fill so shade isn't black
-  const d = holeDir(h), sa = d + 1.25 * Math.PI, sun = new THREE.DirectionalLight(0xffffff, .78);
-  three.sunDir = new THREE.Vector3(Math.cos(sa), 1.15, Math.sin(sa)).normalize();
-  sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096); sun.shadow.bias = -.0004; sun.shadow.normalBias = .04;
-  scene.add(sun, sun.target, new THREE.AmbientLight(0xffffff, .32)); three.sun = sun;
-  // ground
-  const tex = new THREE.CanvasTexture(paintGround(h, bb, Math.min(4, 4096 / Math.max(bb.x1 - bb.x0, bb.y1 - bb.y0)), C3.dither ? 0 : .34)); tex.anisotropy = aniso; three.groundTex = tex;
-  const grain = new THREE.CanvasTexture(noiseTile()); grain.wrapS = grain.wrapT = THREE.RepeatWrapping; grain.anisotropy = aniso;
-  three.patchU = { grain: { value: grain, type: 'sampler2D' }, mapD: { value: null, type: 'sampler2D' }, dRect: { value: new THREE.Vector4(), type: 'vec4' }, useD: { value: 0, type: 'float' } };
-  const groundMat = worldAware(toon(0xffffff, { map: tex }), `
-    if (useD > .5) { vec2 q = (vWp.xz - dRect.xy) / (dRect.zw - dRect.xy);
-      if (q.x > 0. && q.x < 1. && q.y > 0. && q.y < 1.) { float e = min(min(q.x, 1. - q.x), min(q.y, 1. - q.y)); diffuseColor.rgb = mix(diffuseColor.rgb, texture2D(mapD, vec2(q.x, 1. - q.y)).rgb, smoothstep(0., .1, e)); } }
-    diffuseColor.rgb *= mix(1., texture2D(grain, vWp.xz * .45).r, .38) * mix(1., texture2D(grain, vWp.xz * .07).r, .2);`, three.patchU);
+  const T = three, scene = new THREE.Scene(); T.scene = scene; T.hole = h;
+  scene.background = new THREE.Color(.82, .86, .9); scene.fog = new THREE.FogExp2(0xd4dbe2, .0011);
+  const bb = staticBounds(h, 110); T.bb = bb;
+  // light: the sun (direction found in the sky photo when it loads) and a soft sky fill until the photo arrives
+  const sun = new THREE.DirectionalLight(0xfff3e0, 2.1); sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096); sun.shadow.bias = -.00025; sun.shadow.normalBias = .03; sun.shadow.radius = 2.5;
+  scene.add(sun, sun.target, new THREE.HemisphereLight(0xdbe8ff, 0x4a5a2a, .35)); T.sun = sun;
+  // ground: real grass and sand textures, chosen and tinted by the splat map, with a sharper splat near the ball
+  T.splat = new THREE.CanvasTexture(paintSplat(h, bb, Math.min(4, 4096 / Math.max(bb.x1 - bb.x0, bb.y1 - bb.y0)))); T.splat.anisotropy = 8;
+  T.groundU = Object.assign({}, U, { splat: { value: T.splat, type: 'sampler2D' }, sRect: { value: new THREE.Vector4(bb.x0, bb.y0, bb.x1, bb.y1), type: 'vec4' },
+    splatD: { value: null, type: 'sampler2D' }, dRect: { value: new THREE.Vector4(), type: 'vec4' }, useD: { value: 0, type: 'float' }, sandMap: { value: TEX.sand, type: 'sampler2D' } });
+  const groundMat = worldAware(new THREE.MeshStandardMaterial({ map: TEX.grass, normalMap: TEX.grassN, roughnessMap: TEX.grassR, normalScale: new THREE.Vector2(.9, .9) }), { uniforms: T.groundU,
+    afterMap: `
+      vec2 sq = (vWp.xz - sRect.xy) / (sRect.zw - sRect.xy);
+      vec4 sp = texture2D(splat, vec2(sq.x, 1. - sq.y));
+      if (useD > .5) { vec2 q = (vWp.xz - dRect.xy) / (dRect.zw - dRect.xy);
+        if (q.x > 0. && q.x < 1. && q.y > 0. && q.y < 1.) { float e = min(min(q.x, 1. - q.x), min(q.y, 1. - q.y)); sp = mix(sp, texture2D(splatD, vec2(q.x, 1. - q.y)), smoothstep(0., .1, e)); } }
+      vec3 macro = mapTexelToLinear(texture2D(map, vWp.xz * .021)).rgb;
+      vec3 grass = diffuseColor.rgb * mix(vec3(1.), macro * 2.2, .4) * vec3(.55, .85, .32) * 1.9;
+      grass = mix(grass * vec3(.95, .9, .8), grass * vec3(1.05, 1.12, 1.), sp.b);
+      vec3 sandc = mapTexelToLinear(texture2D(sandMap, vWp.xz * .32)).rgb * vec3(1.15, 1.07, .92);
+      diffuseColor.rgb = mix(grass * sp.r * 1.25, sandc, sp.g);
+      float sandAmt = sp.g;`,
+    afterRough: 'roughnessFactor = mix(roughnessFactor, .97, sandAmt);' });
   const STEP = 1, nx = Math.ceil((bb.x1 - bb.x0) / STEP) + 1, ny = Math.ceil((bb.y1 - bb.y0) / STEP) + 1;
   const pos = new Float32Array(nx * ny * 3), uv = new Float32Array(nx * ny * 2), idx = new Uint32Array((nx - 1) * (ny - 1) * 6);
   for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
     const x = Math.min(bb.x1, bb.x0 + i * STEP), y = Math.min(bb.y1, bb.y0 + j * STEP), k = j * nx + i;
-    pos[k * 3] = x; pos[k * 3 + 1] = groundY(h, x, y); pos[k * 3 + 2] = y; uv[k * 2] = (x - bb.x0) / (bb.x1 - bb.x0); uv[k * 2 + 1] = 1 - (y - bb.y0) / (bb.y1 - bb.y0);
+    pos[k * 3] = x; pos[k * 3 + 1] = groundY(h, x, y); pos[k * 3 + 2] = y; uv[k * 2] = x / 2.4; uv[k * 2 + 1] = y / 2.4;
   }
   let q = 0; for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) { const a = j * nx + i, b = a + 1, c = a + nx, e = c + 1; idx[q++] = a; idx[q++] = c; idx[q++] = b; idx[q++] = b; idx[q++] = c; idx[q++] = e; }
   const tg = new THREE.BufferGeometry(); tg.setAttribute('position', new THREE.BufferAttribute(pos, 3)); tg.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); tg.setIndex(new THREE.BufferAttribute(idx, 1)); tg.computeVertexNormals();
   const ground = new THREE.Mesh(tg, groundMat); ground.receiveShadow = true; scene.add(ground);
-  // the land beyond the hole: a ring of plain rough out to the haze
+  // the land beyond the hole: rough out to the haze
   const ring = new THREE.Shape([V2(-9000, 9000), V2(9000, 9000), V2(9000, -9000), V2(-9000, -9000)]);
   ring.holes.push(new THREE.Path([V2(bb.x0 + .5, -bb.y0 - .5), V2(bb.x0 + .5, -bb.y1 + .5), V2(bb.x1 - .5, -bb.y1 + .5), V2(bb.x1 - .5, -bb.y0 - .5)]));
   const fg = new THREE.ShapeGeometry(ring); fg.rotateX(-Math.PI / 2);
-  const far = new THREE.Mesh(fg, worldAware(toon(0xb9b9b9), 'diffuseColor.rgb *= mix(1., texture2D(grain, vWp.xz * .45).r, .38);', { grain: { value: grain, type: 'sampler2D' } }));
+  { const p = fg.attributes.position, fuv = new Float32Array(p.count * 2); for (let i = 0; i < p.count; i++) { fuv[i * 2] = p.getX(i) / 2.4; fuv[i * 2 + 1] = p.getZ(i) / 2.4; } fg.setAttribute('uv', new THREE.BufferAttribute(fuv, 2)); }
+  const far = new THREE.Mesh(fg, worldAware(new THREE.MeshStandardMaterial({ map: TEX.grass, normalMap: TEX.grassN, roughness: .95 }), { uniforms: {},
+    afterMap: 'vec3 macro = mapTexelToLinear(texture2D(map, vWp.xz * .021)).rgb; diffuseColor.rgb *= mix(vec3(1.), macro * 2.2, .4) * vec3(.55, .85, .32) * 1.9 * .75 * 1.25 * .95;' }));
   far.position.y = -.02; far.receiveShadow = true; scene.add(far);
-  // the lake: a darker surface whose light ripples drift, like the 2D water pattern
-  three.waterU = [];
+  // the lake: a still, dark surface that mirrors the sky, with small moving ripples
   h.water.forEach(s => {
     let lv = 0, n = 48; for (let i = 0; i < n; i++) { const a = i / n * TAU, c = Math.cos(s.rot), sn = Math.sin(s.rot), u = Math.cos(a) * s.rx, v = Math.sin(a) * s.ry; lv += zgAt(h, s.x + u * c - v * sn, s.y + u * sn + v * c); }
-    lv = lv / n - .32;
-    const geo = new THREE.CircleGeometry(1, 96); geo.rotateX(-Math.PI / 2);
-    const wu = { time: { value: 0, type: 'float' } }; three.waterU.push(wu);
-    const mat = worldAware(toon(0x8f8f8f), 'float wv = sin(vWp.z * 1.4 + sin(vWp.x * .32 + time * .6) * 1.6 + time * 1.3); diffuseColor.rgb *= 1. + .42 * step(.93, wv) + .12 * step(.6, wv);', wu);
-    const m = new THREE.Mesh(geo, mat); m.scale.set(s.rx + .8, 1, s.ry + .8); m.rotation.y = -s.rot; m.position.set(s.x, lv, s.y); m.receiveShadow = true; scene.add(m);
+    const geo = new THREE.CircleGeometry(1, 128); geo.rotateX(-Math.PI / 2);
+    const mat = worldAware(new THREE.MeshStandardMaterial({ color: 0x0e1c1c, roughness: .04, metalness: 0, envMapIntensity: 1.4 }), { uniforms: U,
+      afterNormal: 'vec2 wp = vWp.xz; vec3 pn = vec3(sin(wp.x * 1.7 + time * 1.3) * .5 + sin(wp.y * 2.3 - time * 1.1) * .5 + sin((wp.x + wp.y) * 5.1 + time * 2.3) * .25, 0., cos(wp.y * 1.9 + time) * .5 + cos(wp.x * 2.9 - time * 1.4) * .4 + cos((wp.x - wp.y) * 6.3 - time * 2.1) * .2);\n normal = normalize(normal + (viewMatrix * vec4(pn * .06, 0.)).xyz);' });
+    const m = new THREE.Mesh(geo, mat); m.scale.set(s.rx + .8, 1, s.ry + .8); m.rotation.y = -s.rot; m.position.set(s.x, lv / n - .32, s.y); m.receiveShadow = true; scene.add(m);
   });
-  // trees
-  const mats = { leaf: toon(0xcfcfcf), bark: toon(0x8a8a8a) };
-  three.trees = h.trees.map((tr, i) => { const t = makeTree(tr, i, h, mats); scene.add(t); return t; });
-  // grass tufts in the rough, thick along the line of play and thinner further out
-  { const route = [h.tee, ...h.fair.filter(s => s.t === 'c').flatMap(s => s.pts), h.cup], tufts = [], rnd = seeded(99), Ltot = [];
-    let L = 0; for (let i = 0; i < route.length - 1; i++) { L += Math.hypot(route[i + 1][0] - route[i][0], route[i + 1][1] - route[i][1]); Ltot.push(L); }
-    for (let n = 0; n < 60000 && tufts.length < 42000; n++) {
-      let t = rnd() * L, i = Ltot.findIndex(v => v >= t); const a = route[i], b = route[i + 1], s0 = i ? Ltot[i - 1] : 0, u = (t - s0) / ((Ltot[i] - s0) || 1);
-      const dx = b[0] - a[0], dy = b[1] - a[1], dl = Math.hypot(dx, dy) || 1, off = (rnd() + rnd() + rnd() - 1.5) * 70;
-      const x = a[0] + dx * u - dy / dl * off, y = a[1] + dy * u + dx / dl * off;
-      if (x < bb.x0 || x > bb.x1 || y < bb.y0 || y > bb.y1 || surfaceAt(h, x, y) !== 'rough') continue;
-      if (h.trees.some(tr => Math.hypot(tr[0] - x, tr[1] - y) < tr[2] * .15)) continue;
-      tufts.push([x, y]);
-    }
-    // tufts are texture, not shapes: they stay out of the outline pass (no depth written, hidden for the normal pass)
-    const im = new THREE.InstancedMesh(tuftGeometry(), toon(0xb4b4b4, { side: THREE.DoubleSide, depthWrite: false }), tufts.length), o = new THREE.Object3D();
-    tufts.forEach(([x, y], k) => { o.position.set(x, groundY(h, x, y), y); o.rotation.set(0, rnd() * TAU, 0); const sc = .7 + rnd() * .9; o.scale.set(sc, sc * (.8 + rnd() * .6), sc); o.updateMatrix(); im.setMatrixAt(k, o.matrix); });
-    im.receiveShadow = true; im.renderOrder = 2; scene.add(im); three.tufts = im; }
+  // grass blades (grown around the ball for each shot)
+  T.grass = grassMesh(); scene.add(T.grass);
+  // trees: four grown variants, instanced for the hole's trees and a forest line beyond it
+  const leafMap = leafAtlas(), variants = [11, 23, 37, 53].map(treeVariant);
+  const barkMat = new THREE.MeshStandardMaterial({ map: TEX.bark, normalMap: TEX.barkN, roughness: .95, color: 0xb8ad9c });
+  const leafMat = worldAware(new THREE.MeshStandardMaterial({ map: leafMap, alphaTest: .5, side: THREE.DoubleSide, roughness: .8, color: 0x7d8c66, envMapIntensity: .55 }), { uniforms: U,
+    vertex: 'vec3 ip = vec3(instanceMatrix[3].x, 0., instanceMatrix[3].z); float hy = position.y * .35; transformed.x += (sin(time * 1.6 + ip.x * .13 + position.y * 2.) * .03 + wind.x * .06) * hy; transformed.z += (cos(time * 1.3 + ip.z * .11 + position.x * 2.) * .03 + wind.y * .06) * hy;' });
+  const leafDepth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: leafMap, alphaTest: .5 });
+  const plants = [];   // [x, y, r, variant]
+  h.trees.forEach((tr, i) => plants.push([tr[0], tr[1], tr[2], i % 4]));
+  { const route = [h.tee, ...h.fair.filter(s => s.t === 'c').flatMap(s => s.pts), h.cup], rnd = seeded(7);
+    const clear = (x, y) => !(inAny(h.fair, x, y) || inAny(h.green, x, y) || inAny(h.water, x, y) || inAny(h.sand, x, y)) && Math.hypot(x - h.tee[0], y - h.tee[1]) > 25
+      && route.every((p, k) => k === route.length - 1 || segDist(x, y, p, route[k + 1]) > 48) && plants.every(p => Math.hypot(p[0] - x, p[1] - y) > p[2] + 5);
+    for (let k = 0; k < 900 && plants.length < h.trees.length + 170; k++) {
+      const a = route[(rnd() * (route.length - 1)) | 0], t = rnd() * 2 - .5, x = a[0] + (rnd() * 2 - 1) * 200, y = a[1] + t * 120;
+      if (clear(x, y)) plants.push([x, y, 6 + rnd() * 6, (rnd() * 4) | 0]); }
+  }
+  variants.forEach((v, vi) => {
+    const mine = plants.filter(p => p[3] === vi), o = new THREE.Object3D(), rnd = seeded(vi + 3);
+    const bm = new THREE.InstancedMesh(v.bark, barkMat, mine.length), lm = new THREE.InstancedMesh(v.leaves, leafMat, mine.length);
+    mine.forEach(([x, y, r], k) => { o.position.set(x, groundY(h, x, y) - .1, y); o.rotation.set(0, rnd() * TAU, 0); o.scale.setScalar(r); o.updateMatrix(); bm.setMatrixAt(k, o.matrix); lm.setMatrixAt(k, o.matrix); });
+    bm.castShadow = bm.receiveShadow = lm.castShadow = lm.receiveShadow = true; lm.customDepthMaterial = leafDepth;
+    scene.add(bm, lm);
+  });
+  // shrubs: a real scanned bush model, scattered at the foot of the trees
+  if (THREE.GLTFLoader) new THREE.GLTFLoader().load(ASSET + 'shrub_04/shrub_04_1k.gltf', gl => {
+    let mesh = null; gl.scene.traverse(o => { if (o.isMesh && !mesh) mesh = o; }); if (!mesh || three.scene !== scene) return;
+    mesh.geometry.computeBoundingBox(); const bx = mesh.geometry.boundingBox, wdt = Math.max(bx.max.x - bx.min.x, bx.max.z - bx.min.z) || 1;
+    const spots = [], rnd = seeded(19); plants.forEach(([x, y, r]) => { for (let k = 0; k < 2; k++) { const a = rnd() * TAU, d = r * (.6 + rnd() * .5); spots.push([x + Math.cos(a) * d, y + Math.sin(a) * d]); } });
+    const im = new THREE.InstancedMesh(mesh.geometry, mesh.material, spots.length), o = new THREE.Object3D();
+    spots.forEach(([x, y], k) => { const s = (1.4 + rnd() * 1.6) / wdt; o.position.set(x, groundY(h, x, y) - bx.min.y * s, y); o.rotation.set(0, rnd() * TAU, 0); o.scale.setScalar(s); o.updateMatrix(); im.setMatrixAt(k, o.matrix); });
+    im.castShadow = im.receiveShadow = true; scene.add(im);
+  });
   // tee markers, yardage discs, cup and flag
-  const ink = toon(0x2a2a2a), white = toon(0xf4f4f4);
-  [-4, 4].forEach(dx => { const tx = h.tee[0] + dx, ty = h.tee[1] - 1.5, m = new THREE.Mesh(new THREE.SphereGeometry(.16, 16, 10), ink); m.position.set(tx, groundY(h, tx, ty) + .14, ty); m.castShadow = true; scene.add(m); });
-  markers(h).forEach(mk => { const m = new THREE.Mesh(new THREE.CylinderGeometry(.32, .32, .08, 20), mk.D === 100 ? ink : mk.D === 150 ? toon(0x777777) : white); m.position.set(mk.x, groundY(h, mk.x, mk.y) + .03, mk.y); m.receiveShadow = true; scene.add(m); });
+  const red = new THREE.MeshStandardMaterial({ color: 0xb3241c, roughness: .4 }), white = new THREE.MeshStandardMaterial({ color: 0xf2f2ee, roughness: .45 });
+  [-4, 4].forEach(dx => { const tx = h.tee[0] + dx, ty = h.tee[1] - 1.5, m = new THREE.Mesh(new THREE.SphereGeometry(.16, 24, 16), red); m.position.set(tx, groundY(h, tx, ty) + .14, ty); m.castShadow = true; scene.add(m); });
+  const discCol = { 100: 0xb3241c, 150: 0xf2f2ee, 200: 0x1f4fa8, 250: 0xd8b21c };
+  markers(h).forEach(mk => { const m = new THREE.Mesh(new THREE.CylinderGeometry(.32, .32, .06, 28), new THREE.MeshStandardMaterial({ color: discCol[mk.D] || 0xffffff, roughness: .5 })); m.position.set(mk.x, groundY(h, mk.x, mk.y) + .02, mk.y); m.receiveShadow = true; scene.add(m); });
   const [cx, cy] = h.cup, cz = groundY(h, cx, cy);
-  const cup = new THREE.Mesh(new THREE.CircleGeometry(.3, 28), new THREE.MeshBasicMaterial({ color: 0x111111 })); cup.rotation.x = -Math.PI / 2; cup.position.set(cx, cz + .015, cy); scene.add(cup);
-  const liner = new THREE.Mesh(new THREE.RingGeometry(.3, .36, 28), white); liner.rotation.x = -Math.PI / 2; liner.position.set(cx, cz + .02, cy); scene.add(liner);
-  const flag = new THREE.Group(); flag.position.set(cx, cz, cy);
-  const spring = new THREE.Group(); flag.add(spring);
-  const pole = new THREE.Mesh(new THREE.CylinderGeometry(.03, .03, 2.6, 8), ink); pole.position.y = 1.3; pole.castShadow = true; spring.add(pole);
-  const fc = document.createElement('canvas'); fc.width = 192; fc.height = 120; const fx = fc.getContext('2d');
-  fx.fillStyle = '#f4f4f4'; fx.fillRect(0, 0, 192, 120); fx.fillStyle = '#111'; fx.font = 'italic 900 84px Fraunces, Georgia, serif'; fx.textAlign = 'center'; fx.textBaseline = 'middle'; fx.fillText(String(S.hole + 1), 96, 66);
-  const clothGeo = new THREE.PlaneGeometry(1.15, .72, 12, 2); clothGeo.translate(.575, 0, 0);
-  const cloth = new THREE.Mesh(clothGeo, toon(0xffffff, { map: new THREE.CanvasTexture(fc), side: THREE.DoubleSide })); cloth.position.y = 2.24; cloth.castShadow = true; spring.add(cloth);
+  const cup = new THREE.Mesh(new THREE.CircleGeometry(.3, 32), new THREE.MeshBasicMaterial({ color: 0x050505 })); cup.rotation.x = -Math.PI / 2; cup.position.set(cx, cz + .012, cy); scene.add(cup);
+  const liner = new THREE.Mesh(new THREE.RingGeometry(.3, .34, 32), white); liner.rotation.x = -Math.PI / 2; liner.position.set(cx, cz + .016, cy); scene.add(liner);
+  const flag = new THREE.Group(); flag.position.set(cx, cz, cy); const spring = new THREE.Group(); flag.add(spring);
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(.025, .025, 2.6, 12), white); pole.position.y = 1.3; pole.castShadow = true; spring.add(pole);
+  const fc = document.createElement('canvas'); fc.width = 256; fc.height = 160; const fx = fc.getContext('2d');
+  fx.fillStyle = '#e8c51e'; fx.fillRect(0, 0, 256, 160); fx.fillStyle = '#1b1b1b'; fx.font = 'italic 900 112px Fraunces, Georgia, serif'; fx.textAlign = 'center'; fx.textBaseline = 'middle'; fx.fillText(String(S.hole + 1), 128, 88);
+  const ft = new THREE.CanvasTexture(fc); ft.encoding = THREE.sRGBEncoding;
+  const clothGeo = new THREE.PlaneGeometry(1.15, .72, 16, 4); clothGeo.translate(.575, 0, 0);
+  const cloth = new THREE.Mesh(clothGeo, new THREE.MeshStandardMaterial({ map: ft, side: THREE.DoubleSide, roughness: .8 })); cloth.position.y = 2.24; cloth.castShadow = true; spring.add(cloth);
   scene.add(flag);
-  // the ball: a seam line so you can see it roll, nested groups so squash, stretch and spin stay independent
-  const bc = document.createElement('canvas'); bc.width = 128; bc.height = 64; const bx = bc.getContext('2d'); bx.fillStyle = '#fff'; bx.fillRect(0, 0, 128, 64);
-  bx.strokeStyle = '#222'; bx.lineWidth = 3; bx.beginPath(); for (let i = 0; i <= 128; i++) { const y = 32 + Math.sin(i / 128 * TAU * 2) * 10; i ? bx.lineTo(i, y) : bx.moveTo(i, y); } bx.stroke();
-  const ballMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), toon(0xffffff, { map: new THREE.CanvasTexture(bc) })); ballMesh.castShadow = true;
+  // the ball: nested groups so squash, stretch and spin stay independent; a printed line shows it spinning
+  const bc = document.createElement('canvas'); bc.width = 256; bc.height = 128; const bx = bc.getContext('2d'); bx.fillStyle = '#fafafa'; bx.fillRect(0, 0, 256, 128);
+  bx.strokeStyle = '#2a2a2a'; bx.lineWidth = 4; bx.beginPath(); bx.moveTo(40, 64); bx.lineTo(92, 64); bx.stroke(); bx.font = '700 22px Figtree, sans-serif'; bx.fillStyle = '#2a2a2a'; bx.fillText('INK 9', 100, 72);
+  const bt = new THREE.CanvasTexture(bc); bt.encoding = THREE.sRGBEncoding;
+  const ballMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 24), new THREE.MeshStandardMaterial({ map: bt, roughness: .3 })); ballMesh.castShadow = true;
   const ballSquash = new THREE.Group(), ballStretch = new THREE.Group(), ballSpin = new THREE.Group(); ballSquash.add(ballStretch); ballStretch.add(ballSpin); ballSpin.add(ballMesh); scene.add(ballSquash);
-  Object.assign(three, { flag, spring, cloth, clothBase: clothGeo.attributes.position.array.slice(), ballSquash, ballStretch, ballSpin, ballMesh, lastBall: null });
+  Object.assign(T, { flag, spring, cloth, clothBase: clothGeo.attributes.position.array.slice(), ballSquash, ballStretch, ballSpin, ballMesh, lastBall: null });
+  applySky();
   C3.ready = true;
 }
 const V2 = (x, y) => new THREE.Vector2(x, y);
-/* a sharp patch of the ground around the ball (and the green when it's close), repainted for every shot */
+/* a sharp splat around the ball (and the green when it's close), plus fresh grass, for every shot */
 function sharpenAround(x, y) {
-  if (!three || !three.patchU) return; const h = H(), R = 55;
+  if (!three || !three.groundU) return; const h = H(), R = 55;
   const dg = Math.hypot(h.cup[0] - x, h.cup[1] - y), cx = dg < R * 1.4 ? (x + h.cup[0]) / 2 : x, cy = dg < R * 1.4 ? (y + h.cup[1]) / 2 : y;
-  const bb = { x0: cx - R, x1: cx + R, y0: cy - R, y1: cy + R }, u = three.patchU;
-  const t = new THREE.CanvasTexture(paintGround(h, bb, 18, C3.dither ? 0 : .09)); t.anisotropy = three.renderer.capabilities.getMaxAnisotropy();
-  if (u.mapD.value) u.mapD.value.dispose(); u.mapD.value = t; u.dRect.value.set(bb.x0, bb.y0, bb.x1, bb.y1); u.useD.value = 1;
+  const bb = { x0: cx - R, x1: cx + R, y0: cy - R, y1: cy + R }, u = three.groundU;
+  const t = new THREE.CanvasTexture(paintSplat(h, bb, 12)); if (u.splatD.value) u.splatD.value.dispose(); u.splatD.value = t; u.dRect.value.set(bb.x0, bb.y0, bb.x1, bb.y1); u.useD.value = 1;
+  growGrass(x + Math.cos(C3.yaw) * 12, y + Math.sin(C3.yaw) * 12);
 }
 { const base = resize; resize = function () { base(); if (three) { three.renderer.setPixelRatio(DPR); three.renderer.setSize(W, Hh, false); three.camera.aspect = W / Hh; three.camera.updateProjectionMatrix(); makeTargets(); } }; }
 
@@ -405,10 +510,8 @@ function animateBall(t, dt, h) {
   T.lastBall = { x, z };
 }
 function animateWorld(t, dt, h) {
-  const T = three, w = S.wind, wl = Math.hypot(w.x, w.y) || 1, wx = w.x / wl, wz = w.y / wl;
-  // trees sway with the wind, each on its own beat
-  T.trees.forEach(tr => { const u = tr.userData, a = Math.sin(t * 1.3 + u.phase) * (.25 + w.mph * .03) / u.h + w.mph * .0015;
-    u.sway.rotation.z = -wx * a; u.sway.rotation.x = wz * a; });
+  const T = three, w = S.wind, wl = Math.hypot(w.x, w.y) || 1;
+  U.time.value += dt; U.wind.value.set(w.x / wl * w.mph * .025, w.y / wl * w.mph * .025);   // grass, leaves and water move with the wind
   // flag: springs and stretches when the ball drops (S.fp, follow-through), streams with the wind, grows with distance so you can find it
   const fd = T.camera.position.distanceTo(T.flag.position); T.flag.scale.setScalar(Math.max(1, fd / 55));
   T.spring.scale.set(1 / Math.sqrt(1 + S.fp), 1 + S.fp, 1 / Math.sqrt(1 + S.fp));
@@ -416,24 +519,21 @@ function animateWorld(t, dt, h) {
   { const p = T.cloth.geometry.attributes.position, base = T.clothBase, amp = .05 + w.mph * .007;
     for (let i = 0; i < p.count; i++) { const x = base[i * 3], yb = base[i * 3 + 1]; p.setZ(i, Math.sin(t * (4 + w.mph * .3) - x * 6 + yb) * amp * x); p.setY(i, yb - x * x * Math.max(0, .12 - w.mph * .008)); }
     p.needsUpdate = true; T.cloth.geometry.computeVertexNormals(); }
-  T.waterU.forEach(u => { u.time.value += dt; });   // the lake's ripples drift
   // shadows follow the camera's area of interest
-  const look = C3.look, span = Math.max(60, Math.min(420, T.camera.position.distanceTo(look) * 1.3)), s = T.sun.shadow.camera;
-  T.sun.target.position.copy(look); T.sun.position.copy(look).addScaledVector(T.sunDir, 400);
-  if (s.right !== span) { s.left = -span; s.right = span; s.top = span; s.bottom = -span; s.near = 1; s.far = 900; s.updateProjectionMatrix(); }
+  const look = C3.look, span = Math.max(50, Math.min(380, T.camera.position.distanceTo(look) * 1.2)), sc = T.sun.shadow.camera;
+  T.sun.target.position.copy(look); T.sun.position.copy(look).addScaledVector(T.sunDir, 500);
+  if (sc.right !== span) { sc.left = -span; sc.right = span; sc.top = span; sc.bottom = -span; sc.near = 1; sc.far = 1200; sc.updateProjectionMatrix(); }
+  T.post.material.uniforms.seed.value = (t * 13.37) % 100;
 }
 
-/* ---------- each frame: colour pass, normal pass, outline composite, then the game's 2D overlays ---------- */
+/* ---------- each frame: the scene into a high-range buffer, the final photographic pass, then the game's 2D overlays ---------- */
 draw = function (t, dt) {
   if (!three || !three.scene) return;
   const h = H(), b = S.ball, T = three, r = T.renderer;
   updateCamera(t, dt); animateBall(t, dt, h); animateWorld(t, dt, h);
   r.shadowMap.needsUpdate = true;
-  r.setRenderTarget(T.rtC); r.render(T.scene, T.camera);
-  T.tufts.visible = false; T.scene.overrideMaterial = T.normalMat; const bg = T.scene.background, fog = T.scene.fog; T.scene.background = new THREE.Color(.5, .5, 1); T.scene.fog = null;
-  r.setRenderTarget(T.rtN); r.render(T.scene, T.camera);
-  T.scene.overrideMaterial = null; T.scene.background = bg; T.scene.fog = fog; T.tufts.visible = true;
-  r.setRenderTarget(null); r.render(T.edgeScene, T.edgeCam);
+  r.setRenderTarget(T.rt); r.render(T.scene, T.camera);
+  r.setRenderTarget(null); r.render(T.postScene, T.postCam);
   // overlays
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.clearRect(0, 0, W, Hh); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   const real = WS; WS = WS3;
@@ -473,16 +573,20 @@ $('viewBtn').addEventListener('click', () => { audioInit(); if (look.on) exitLoo
 addEventListener('keydown', e => { if ((e.key === 'v' || e.key === 'V') && $('card').hidden && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); $('viewBtn').click(); } });
 { let m = 'behind'; try { m = localStorage.getItem('inknine-view') || 'behind'; } catch (_) {} setView(m === 'aerial' ? 'aerial' : 'behind', true); }
 $('lookhint').firstElementChild.textContent = 'The whole hole from above. Press Space to go back.';
-// dithering on or off: B or the button; remembered between visits
+// dithering on or off (B or the button), colour or black and white (C); both remembered between visits
 function setDither(on, quiet) {
   C3.dither = on; try { localStorage.setItem('inknine-dither', on ? '1' : '0'); } catch (_) {}
-  if (three) { three.edge.material.uniforms.dither.value = on ? 1 : 0;
-    if (three.groundTex && !quiet) {   // repaint the ground with or without its ink lines
-      const h = H(), bb = three.bb; three.groundTex.image = paintGround(h, bb, Math.min(4, 4096 / Math.max(bb.x1 - bb.x0, bb.y1 - bb.y0)), on ? 0 : .34); three.groundTex.needsUpdate = true;
-      sharpenAround(S.ball.x, S.ball.y); } }
+  if (three) three.post.material.uniforms.mode.value = styleMode();
   const b = $('ditherBtn'); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on));
   if (!quiet) { sfx('tick'); tone(on ? 900 : 600, .12, 'square', .04, on ? 450 : 1200); }
 }
+function setColour(on, quiet) {
+  C3.colour = on; try { localStorage.setItem('inknine-colour', on ? '1' : '0'); } catch (_) {}
+  if (three) three.post.material.uniforms.mode.value = styleMode();
+  if (!quiet) { sfx('tick'); tone(on ? 660 : 440, .14, 'sine', .06, on ? 990 : 330); }
+}
 $('ditherBtn').addEventListener('click', () => { audioInit(); setDither(!C3.dither); $('ditherBtn').blur(); });
-addEventListener('keydown', e => { if ((e.key === 'b' || e.key === 'B') && $('card').hidden && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); $('ditherBtn').click(); } });
-{ let on = false; try { on = localStorage.getItem('inknine-dither') === '1'; } catch (_) {} setDither(on, true); }
+addEventListener('keydown', e => { if (!$('card').hidden || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === 'b' || e.key === 'B') { e.preventDefault(); $('ditherBtn').click(); }
+  if (e.key === 'c' || e.key === 'C') { e.preventDefault(); audioInit(); setColour(!C3.colour); } });
+{ let on = false, col = false; try { on = localStorage.getItem('inknine-dither') === '1'; col = localStorage.getItem('inknine-colour') === '1'; } catch (_) {} C3.colour = col; setDither(on, true); }

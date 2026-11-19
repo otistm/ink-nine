@@ -96,7 +96,7 @@
 </button>
 <div id="lookhint" hidden><span>Drag to look around, pinch to zoom</span></div>
 <div id="coach" hidden role="status" aria-live="polite"><button type="button" class="cx" id="coachX" aria-label="Hide this tip" tabindex="-1"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5L15 15M15 5L5 15" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button><small id="coachN"></small><p id="coachT"></p><button class="linkbtn" id="coachSkip">Skip tutorial</button><div class="cbar" aria-hidden="true"><i id="coachBar"></i></div></div>
-<aside id="keys" aria-label="Keyboard shortcuts"><b>Keys</b><span><kbd>1</kbd>–<kbd>8</kbd> clubs</span><span><kbd>←</kbd><kbd>→</kbd> turn to aim</span><span><kbd>V</kbd> behind the ball or aerial</span><span><kbd>B</kbd> dithered black and white</span><span><kbd>Space</kbd> the whole hole</span><span><kbd>W</kbd> wind</span><span><kbd>↑</kbd><kbd>↓</kbd> strike point</span><span><kbd>P</kbd> pause</span><span>Scroll to zoom, right-drag to turn</span></aside>
+<aside id="keys" aria-label="Keyboard shortcuts"><b>Keys</b><span><kbd>1</kbd>–<kbd>8</kbd> clubs</span><span><kbd>←</kbd><kbd>→</kbd> turn to aim</span><span><kbd>V</kbd> behind the ball or aerial</span><span><kbd>B</kbd> dithered black and white</span><span><kbd>C</kbd> colour</span><span><kbd>Space</kbd> the whole hole</span><span><kbd>W</kbd> wind</span><span><kbd>↑</kbd><kbd>↓</kbd> strike point</span><span><kbd>P</kbd> pause</span><span>Scroll to zoom, right-drag to turn</span></aside>
 <div id="hint"><span>Pick a club, then drag back and let go</span></div>
 
 <nav id="bar" aria-label="Clubs">
@@ -125,6 +125,8 @@
 <script src="/play/js/draw.js"></script>
 <script src="/desktop/desk.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/RGBELoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="/desktop/3d/play3d.js"></script>
 <script src="/play/js/main.js"></script>
 <script>if('serviceWorker' in navigator&&location.protocol==='https:') navigator.serviceWorker.register('/sw.js').catch(()=>{});</script>
