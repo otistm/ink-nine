@@ -6,7 +6,7 @@
 "use strict";
 
 const P3_COURSE = 0, P3_HOLE = 2;
-const C3 = { dither: false, colour: false, mode: 'behind', span: 60, yaw: 0, zoom: 1, ready: false, pos: new THREE.Vector3(), look: new THREE.Vector3(), lastState: '', yawDrag: null };
+const C3 = { dither: false, colour: true, mode: 'aerial', span: 60, yaw: 0, zoom: 1, ready: false, pos: new THREE.Vector3(), look: new THREE.Vector3(), lastState: '', yawDrag: null };
 let three = null;
 
 /* ---------- start straight on the hole; no saving, no online, no invitational ---------- */
@@ -561,7 +561,7 @@ addEventListener('keydown', e => {
     C3.yaw += (k === 'ArrowLeft' || k === 'a' || k === 'A' ? -1 : 1) * (e.shiftKey ? .004 : .025); updHUD(); }
 }, true);
 function setView(m, quiet) {
-  C3.mode = m; try { localStorage.setItem('inknine-view', m); } catch (_) {}
+  C3.mode = m; try { localStorage.setItem('inknine-view2', m); } catch (_) {}
   $('viewBtn').firstChild.textContent = m === 'aerial' ? 'Behind the ball' : 'Aerial view';
   $('viewBtn').setAttribute('aria-label', m === 'aerial' ? 'Switch to the view from behind the ball' : 'Switch to the aerial view');
   $('hint').firstElementChild.textContent = m === 'aerial'
@@ -571,17 +571,17 @@ function setView(m, quiet) {
 }
 $('viewBtn').addEventListener('click', () => { audioInit(); if (look.on) exitLook(); setView(C3.mode === 'aerial' ? 'behind' : 'aerial'); $('viewBtn').blur(); });
 addEventListener('keydown', e => { if ((e.key === 'v' || e.key === 'V') && $('card').hidden && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); $('viewBtn').click(); } });
-{ let m = 'behind'; try { m = localStorage.getItem('inknine-view') || 'behind'; } catch (_) {} setView(m === 'aerial' ? 'aerial' : 'behind', true); }
+{ let m = 'aerial'; try { m = localStorage.getItem('inknine-view2') || 'aerial'; } catch (_) {} setView(m === 'behind' ? 'behind' : 'aerial', true); }   // aerial unless you chose otherwise
 $('lookhint').firstElementChild.textContent = 'The whole hole from above. Press Space to go back.';
 // dithering on or off (B or the button), colour or black and white (C); both remembered between visits
 function setDither(on, quiet) {
-  C3.dither = on; try { localStorage.setItem('inknine-dither', on ? '1' : '0'); } catch (_) {}
+  C3.dither = on; try { localStorage.setItem('inknine-dither2', on ? '1' : '0'); } catch (_) {}
   if (three) three.post.material.uniforms.mode.value = styleMode();
   const b = $('ditherBtn'); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on));
   if (!quiet) { sfx('tick'); tone(on ? 900 : 600, .12, 'square', .04, on ? 450 : 1200); }
 }
 function setColour(on, quiet) {
-  C3.colour = on; try { localStorage.setItem('inknine-colour', on ? '1' : '0'); } catch (_) {}
+  C3.colour = on; try { localStorage.setItem('inknine-colour2', on ? '1' : '0'); } catch (_) {}
   if (three) three.post.material.uniforms.mode.value = styleMode();
   if (!quiet) { sfx('tick'); tone(on ? 660 : 440, .14, 'sine', .06, on ? 990 : 330); }
 }
@@ -589,4 +589,4 @@ $('ditherBtn').addEventListener('click', () => { audioInit(); setDither(!C3.dith
 addEventListener('keydown', e => { if (!$('card').hidden || e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === 'b' || e.key === 'B') { e.preventDefault(); $('ditherBtn').click(); }
   if (e.key === 'c' || e.key === 'C') { e.preventDefault(); audioInit(); setColour(!C3.colour); } });
-{ let on = false, col = false; try { on = localStorage.getItem('inknine-dither') === '1'; col = localStorage.getItem('inknine-colour') === '1'; } catch (_) {} C3.colour = col; setDither(on, true); }
+{ let on = false, col = true; try { on = localStorage.getItem('inknine-dither2') === '1'; col = localStorage.getItem('inknine-colour2') !== '0'; } catch (_) {} C3.colour = col; setDither(on, true); }   // colour unless you chose black and white
