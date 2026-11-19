@@ -37,10 +37,7 @@
 #viewBtn{position:fixed;right:28px;bottom:156px;z-index:6;appearance:none;border:2.5px solid var(--ink);border-radius:999px;background:var(--paper);color:var(--ink);box-shadow:3px 4px 0 var(--ink);font:800 13px var(--ui);padding:8px 14px;cursor:pointer;transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
 #viewBtn:hover{transform:translateY(-2px)}#viewBtn:active{transform:scale(1.08,.9)}#viewBtn:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
 #viewBtn kbd{margin:0 0 0 6px}
-#stylePick{position:fixed;right:28px;bottom:204px;z-index:6;display:flex;align-items:center;gap:2px;border:2.5px solid var(--ink);border-radius:999px;background:var(--paper);box-shadow:3px 4px 0 var(--ink);font:800 13px var(--ui);padding:2px}
-#stylePick span{min-width:112px;text-align:center}
-#engPanel{position:fixed;left:28px;top:128px;z-index:6;width:224px;display:grid;gap:4px;border:2.5px solid var(--ink);border-radius:16px;background:var(--paper);box-shadow:3px 4px 0 var(--ink);padding:10px 14px 8px;font:700 12.5px var(--ui)}
-#engPanel[hidden],#bitPanel[hidden]{display:none}
+#bitPanel[hidden]{display:none}
 #bitPanel{position:fixed;left:28px;top:128px;z-index:6;width:224px;display:grid;gap:4px;border:2.5px solid var(--ink);border-radius:16px;background:var(--paper);box-shadow:3px 4px 0 var(--ink);padding:10px 14px 8px;font:700 12.5px var(--ui)}
 #bitPanel b{font-family:var(--display);font-style:italic;font-weight:900;font-size:16px}
 #bitPanel label{display:flex;justify-content:space-between;margin-top:4px}#bitPanel label span{color:var(--soft)}#bitPanel .lab{margin-top:6px}
@@ -48,13 +45,7 @@
 #bitPals{display:grid;gap:4px}
 #bitPals button{appearance:none;display:flex;align-items:center;gap:8px;border:2px solid var(--ink);border-radius:10px;background:var(--paper);color:var(--ink);font:800 12px var(--ui);padding:4px 8px;cursor:pointer;text-align:left}
 #bitPals button.on{background:var(--ink);color:var(--paper)}
-#bitPals i{display:flex}#bitPals s{display:block;width:8px;height:12px}
-#engPanel b{font-family:var(--display);font-style:italic;font-weight:900;font-size:16px}
-#engPanel label{display:flex;justify-content:space-between;margin-top:4px}#engPanel label span{color:var(--soft)}
-#engPanel input[type=range]{width:100%;accent-color:#000;cursor:pointer}
-#engPanel .linkbtn{justify-self:end;font-size:12px}
-#stylePick button{appearance:none;border:0;background:none;width:30px;height:30px;border-radius:50%;font:900 20px var(--ui);line-height:1;cursor:pointer;color:var(--ink)}
-#stylePick button:hover{background:var(--ink);color:var(--paper)}#stylePick button:focus-visible{outline:3px solid var(--ink)}</style>
+#bitPals i{display:flex}#bitPals s{display:block;width:8px;height:12px}</style>
 </head>
 <body>
 <canvas id="c3" aria-hidden="true"></canvas>
@@ -104,28 +95,20 @@
     <path d="M15.2 17 L10.5 28.5 M15.2 17 L20 28.5 M15.2 17 L15.2 28.5"/>
   </svg>
 </button>
-<div id="engPanel" hidden role="group" aria-label="Engraving settings">
-  <b>Engraving</b>
-  <label for="engI">Intensity <span id="engIv">100%</span></label><input id="engI" type="range" min="0" max="2" step="0.05" value="1">
-  <label for="engS">Line spacing <span id="engSv">5 px</span></label><input id="engS" type="range" min="2.5" max="12" step="0.5" value="5">
-  <label for="engO">Outlines <span id="engOv">100%</span></label><input id="engO" type="range" min="0" max="1.5" step="0.05" value="1">
-  <button type="button" id="engReset" class="linkbtn">Reset</button>
-</div>
-<div id="bitPanel" hidden role="group" aria-label="8-bit settings">
+<div id="bitPanel" role="group" aria-label="8-bit settings">
   <b>8-bit</b>
   <label for="bitPx">Pixel size <span id="bitPxv">2 px</span></label><input id="bitPx" type="range" min="1" max="10" step="1" value="2">
   <span class="lab">Palette</span><div id="bitPals"></div>
   <label for="bitD">Dither <span id="bitDv">70%</span></label><input id="bitD" type="range" min="0" max="1.5" step="0.05" value="0.7">
   <button type="button" id="bitReset" class="linkbtn">Reset</button>
 </div>
-<div id="stylePick" role="group" aria-label="Style"><button id="styPrev" type="button" aria-label="Previous style">‹</button><span id="styName">8-bit</span><button id="styNext" type="button" aria-label="Next style">›</button></div>
 <button id="viewBtn" type="button">Behind the ball<kbd>V</kbd></button>
 <button id="pause" type="button" aria-label="Pause">
   <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="9" y="8" width="5" height="16" rx="1.5" fill="currentColor"/><rect x="18" y="8" width="5" height="16" rx="1.5" fill="currentColor"/></svg>
 </button>
 <div id="lookhint" hidden><span>Drag to look around, pinch to zoom</span></div>
 <div id="coach" hidden role="status" aria-live="polite"><button type="button" class="cx" id="coachX" aria-label="Hide this tip" tabindex="-1"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5L15 15M15 5L5 15" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button><small id="coachN"></small><p id="coachT"></p><button class="linkbtn" id="coachSkip">Skip tutorial</button><div class="cbar" aria-hidden="true"><i id="coachBar"></i></div></div>
-<aside id="keys" aria-label="Keyboard shortcuts"><b>Keys</b><span><kbd>1</kbd>–<kbd>8</kbd> clubs</span><span><kbd>←</kbd><kbd>→</kbd> turn to aim</span><span><kbd>V</kbd> behind the ball or aerial</span><span><kbd>[</kbd><kbd>]</kbd> change style</span><span><kbd>Space</kbd> the whole hole</span><span><kbd>W</kbd> wind</span><span><kbd>↑</kbd><kbd>↓</kbd> strike point</span><span><kbd>P</kbd> pause</span><span>Scroll to zoom, right-drag to turn</span></aside>
+<aside id="keys" aria-label="Keyboard shortcuts"><b>Keys</b><span><kbd>1</kbd>–<kbd>8</kbd> clubs</span><span><kbd>←</kbd><kbd>→</kbd> turn to aim</span><span><kbd>V</kbd> behind the ball or aerial</span><span><kbd>Space</kbd> the whole hole</span><span><kbd>W</kbd> wind</span><span><kbd>↑</kbd><kbd>↓</kbd> strike point</span><span><kbd>P</kbd> pause</span><span>Scroll to zoom, right-drag to turn</span></aside>
 <div id="hint"><span>Pick a club, then drag back and let go</span></div>
 
 <nav id="bar" aria-label="Clubs">

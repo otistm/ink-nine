@@ -3,6 +3,7 @@
 ## 0.24.0
 - New 3D prototype at /desktop/3d/: play Meadowbrook hole 3, Long Way Round, in 3D. It is a test page only, linked from nowhere, and keeps its own saves.
 - Same swing, tempo, curve, wind, physics and scoring as the game. The camera sits behind the ball: turn with the arrow keys (hold Shift for fine turns) or right-drag, scroll to zoom, and press Space for the whole hole from above.
+- 8-bit is now the only look: the other styles, the style picker, the [ ] keys and the Engraving panel are gone. The 8-bit panel (pixel size, palette, dither) stays.
 - The 3D hole now opens in 8-bit: Retro 16 palette, 2 px pixels, 70% dither. Earlier style choices are reset once so everyone starts here; the arrows and [ ] still switch styles.
 - 8-bit style (the last in the style list): chunky pixels, a small palette, and ordered dithering between its colours, like an old console. A panel on the left sets Pixel size (1 to 10), Palette (Retro 16, Pocket 4 greens, Dusk 8) and Dither strength, with Reset. Settings are remembered.
 - Engraving dials: when Engraving is on, a small panel on the left has three sliders: Intensity (how dark and dense the hatching gets), Line spacing (fine banknote lines to bold woodcut lines) and Outlines (how strongly trees and edges are inked), plus Reset. Settings are remembered.
