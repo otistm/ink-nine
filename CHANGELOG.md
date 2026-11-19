@@ -3,7 +3,9 @@
 ## 0.24.0
 - New 3D prototype at /desktop/3d/: play Meadowbrook hole 3, Long Way Round, in 3D. It is a test page only, linked from nowhere, and keeps its own saves.
 - Same swing, tempo, curve, wind, physics and scoring as the game. The camera sits behind the ball: turn with the arrow keys (hold Shift for fine turns) or right-drag, scroll to zoom, and press Space for the whole hole from above.
-- The ground is the game's own ink drawing of the hole, draped over the real hills. Trees, the flag and the ball are drawn in 3D with ink outlines, and shade becomes pen hatching. The course around the ball is redrawn sharply for every shot, so putting stays crisp.
+- The course is fully 3D in greyscale toon shading: bunkers are dug in with a lip, greens and the tee are raised, the lake sits low with drifting ripples, and grass tufts grow in the rough. Light falls in hard bands, trees and the flag cast real shadows, and every shape has a thin black outline. Surface edges are inked too, with the green's fringe dashed like the 2D game. The ground around the ball is repainted sharply for every shot.
+- Trees have trunks, branches and clumped crowns that sway with the wind. The ball has a seam so you can see it roll and spin.
+- The 2D game's animation carries over: the ball stretches in flight and on the roll and squashes on landing, squashes and trembles as you pull back (anticipation), the flag springs when the ball drops (follow-through), the camera rides a slightly springy rig and shakes on big hits, and it drops in low beside the cup when a putt is tracking in.
 - Aerial view: press V or the button above the telescope to play from high above, with the hole running up the screen like the 2D game. The camera frames your ball and where the shot is heading, and follows the ball in the air. Drag back away from where you want the ball to go, in any direction. Press V again to go back behind the ball. The page remembers which view you used last.
 - Uses one outside library, Three.js, loaded from a CDN on this page only. The phone game and desktop edition don't load it.
 
