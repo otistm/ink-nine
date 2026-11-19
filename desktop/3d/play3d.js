@@ -215,10 +215,19 @@ const ENG = { i: 1, s: 5, o: 1 };
 const STYLES = [
   { name: 'Realistic' }, { name: 'Black and white' }, { name: '1-bit dither' },
   { name: 'Ink and wash', depth: true }, { name: 'Watercolour', depth: true }, { name: 'Engraving', depth: true },
-  { name: 'Risograph', depth: true }, { name: 'Gouache poster', depth: true }, { name: 'Blueprint', depth: true }
+  { name: 'Risograph', depth: true }, { name: 'Gouache poster', depth: true }, { name: 'Blueprint', depth: true },
+  { name: '8-bit' }
 ];
+// 8-bit palettes (hex), and the style's dials: pixel size (page pixels), palette, dither strength
+const PALETTES = {
+  'Retro 16': ['141b1f', '2b3a2e', '3f6b3a', '5f9e3e', '9fcf5a', 'e7f2a5', 'f4f1de', 'c9b57a', '7a5634', '4b3527', '2f5d8c', '5aa0d6', '627c30', 'ffffff', 'c0473b', 'f0c23b'],
+  'Pocket 4': ['0f380f', '306230', '8bac0f', '9bbc0f'],
+  'Dusk 8': ['1b1029', '3d2149', '6b2f5b', 'a8435a', 'e0704c', 'f2b35e', 'f7e3a1', '5b7fa6']
+};
+const BIT = { px: 4, pal: 'Retro 16', d: .7 };
+const palUniform = name => { const a = []; for (let i = 0; i < 16; i++) { const hx = PALETTES[name][Math.min(i, PALETTES[name].length - 1)]; a.push(new THREE.Color('#' + hx)); } return a; };
 const POST_FS = `
-uniform sampler2D tColor, tDepth, bayer; uniform float style, cell, exposure, cn, cf, engI, engS, engO; uniform vec2 res; varying vec2 vUv;
+uniform sampler2D tColor, tDepth, bayer; uniform float style, cell, exposure, cn, cf, engI, engS, engO, bitPx, bitN, bitD; uniform vec3 pal[16]; uniform vec2 res; varying vec2 vUv;
 vec3 aces(vec3 x){ return clamp((x * (2.51 * x + .03)) / (x * (2.43 * x + .59) + .14), 0., 1.); }
 vec3 tone(vec2 uv){ return pow(aces(texture2D(tColor, uv).rgb * exposure), vec3(1. / 2.2)); }
 float luma(vec3 c){ return dot(c, vec3(.2126, .7152, .0722)); }
@@ -282,10 +291,18 @@ void main(){
     vec3 h = rgb2hsv(tone(u2)); h.x = floor(h.x * 18. + .5) / 18.; h.y = clamp(h.y * 1.2, 0., 1.); h.z = floor(h.z * 5. + .5) / 5. * .9 + h.z * .1;
     vec3 c = hsv2rgb(h); c = mix(c, c * .35, depthEdge(u2, 1.5) * .8);
     col = c * (.94 + .06 * fbm(sp * vec2(.5, .08)));
-  } else {                                               // blueprint: white line drawing on blue, with a drafting grid
+  } else if (style < 8.5) {                              // blueprint: white line drawing on blue, with a drafting grid
     float e = max(depthEdge(uv, 1.), smoothstep(.15, .45, lumEdge(uv, 1.)));
     vec2 g = abs(fract(sp / 40.) - .5); float grid = max(step(.485, g.x), step(.485, g.y)) * .18;
     col = vec3(.06, .2, .42) + vec3(.85, .92, 1.) * (e * .95 + grid + luma(tone(uv)) * .08);
+  } else {                                               // 8-bit: chunky pixels, a small palette, ordered dither between its colours
+    float P = bitPx * cell * .5; vec2 cellXY = floor(gl_FragCoord.xy / P);
+    vec3 c = tone((cellXY * P + P * .5) / res);
+    float t = texture2D(bayer, cellXY / 8.).r - .5;
+    c = clamp(c + t * bitD * (bitN > 6. ? .18 : .34), 0., 1.);
+    float best = 1e9; vec3 pick = pal[0];
+    for (int i = 0; i < 16; i++) { if (float(i) >= bitN) break; vec3 d = (c - pal[i]) * vec3(.3, .59, .11); float dd = dot(d, d) + dot(c - pal[i], c - pal[i]) * .15; if (dd < best) { best = dd; pick = pal[i]; } }
+    col = pick;
   }
   gl_FragColor = vec4(col, 1.);
 }`;
@@ -331,7 +348,7 @@ function build3D(h) {
     renderer.setPixelRatio(DPR); renderer.setSize(W, Hh, false);
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.shadowMap.autoUpdate = false;
     const post = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ vertexShader: POST_VS, fragmentShader: POST_FS, depthTest: false, depthWrite: false,
-      uniforms: { tColor: { value: null }, tDepth: { value: null }, bayer: { value: BAYER }, style: { value: C3.style }, cell: { value: 2 * DPR }, exposure: { value: .82 }, res: { value: new THREE.Vector2() }, cn: { value: .05 }, cf: { value: 12000 }, engI: { value: ENG.i }, engS: { value: ENG.s }, engO: { value: ENG.o } } }));
+      uniforms: { tColor: { value: null }, tDepth: { value: null }, bayer: { value: BAYER }, style: { value: C3.style }, cell: { value: 2 * DPR }, exposure: { value: .82 }, res: { value: new THREE.Vector2() }, cn: { value: .05 }, cf: { value: 12000 }, engI: { value: ENG.i }, engS: { value: ENG.s }, engO: { value: ENG.o }, bitPx: { value: BIT.px }, bitD: { value: BIT.d }, bitN: { value: PALETTES[BIT.pal].length }, pal: { value: palUniform(BIT.pal) } } }));
     const postScene = new THREE.Scene(); postScene.add(post);
     three = { renderer, camera: new THREE.PerspectiveCamera(48, W / Hh, .05, 12000), post, postScene, postCam: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1),
       sunDir: new THREE.Vector3(-.55, .44, .7).normalize(), haze: new THREE.Color(.75, .8, .85) };
@@ -642,7 +659,7 @@ $('lookhint').firstElementChild.textContent = 'The whole hole from above. Press 
 function setStyle(i, quiet) {
   C3.style = (i + STYLES.length) % STYLES.length; try { localStorage.setItem('inknine-style', String(C3.style)); } catch (_) {}
   if (three) three.post.material.uniforms.style.value = C3.style;
-  $('styName').textContent = STYLES[C3.style].name; $('engPanel').hidden = STYLES[C3.style].name !== 'Engraving'; $('stylePick').setAttribute('aria-label', `Style: ${STYLES[C3.style].name}`);
+  $('styName').textContent = STYLES[C3.style].name; $('engPanel').hidden = STYLES[C3.style].name !== 'Engraving'; $('bitPanel').hidden = STYLES[C3.style].name !== '8-bit'; $('stylePick').setAttribute('aria-label', `Style: ${STYLES[C3.style].name}`);
   if (!quiet) { sfx('tick'); tone(500 + C3.style * 60, .12, 'sine', .06); callout(STYLES[C3.style].name, `Style ${C3.style + 1} of ${STYLES.length}`); }
 }
 $('styPrev').addEventListener('click', () => { audioInit(); setStyle(C3.style - 1); $('styPrev').blur(); });
@@ -663,3 +680,17 @@ function setEng(quiet) {
 $('engReset').addEventListener('click', () => { Object.assign(ENG, { i: 1, s: 5, o: 1 }); setEng(); sfx('tick'); });
 ['engI', 'engS', 'engO'].forEach(id => $(id).addEventListener('keydown', e => e.stopPropagation()));   // arrow keys move the slider, not the aim
 { try { Object.assign(ENG, JSON.parse(localStorage.getItem('inknine-eng') || '{}')); } catch (_) {} setEng(true); $('engPanel').hidden = STYLES[C3.style].name !== 'Engraving'; }
+
+// 8-bit dials: pixel size, palette, dither; remembered between visits
+function setBit(quiet) {
+  if (three) { const u = three.post.material.uniforms; u.bitPx.value = BIT.px; u.bitD.value = BIT.d; u.bitN.value = PALETTES[BIT.pal].length; u.pal.value = palUniform(BIT.pal); }
+  $('bitPx').value = BIT.px; $('bitD').value = BIT.d; $('bitPxv').textContent = BIT.px + ' px'; $('bitDv').textContent = Math.round(BIT.d * 100) + '%';
+  [...document.querySelectorAll('#bitPals button')].forEach(b => { const on = b.dataset.p === BIT.pal; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+  if (!quiet) try { localStorage.setItem('inknine-bit', JSON.stringify(BIT)); } catch (_) {}
+}
+$('bitPals').innerHTML = Object.keys(PALETTES).map(n => `<button type="button" data-p="${n}"><i>${PALETTES[n].slice(0, 8).map(h => `<s style="background:#${h}"></s>`).join('')}</i>${n}</button>`).join('');
+[...document.querySelectorAll('#bitPals button')].forEach(b => b.addEventListener('click', () => { BIT.pal = b.dataset.p; setBit(); sfx('tick'); b.blur(); }));
+$('bitPx').addEventListener('input', e => { BIT.px = parseFloat(e.target.value); setBit(); });
+$('bitD').addEventListener('input', e => { BIT.d = parseFloat(e.target.value); setBit(); });
+$('bitReset').addEventListener('click', () => { Object.assign(BIT, { px: 4, pal: 'Retro 16', d: .7 }); setBit(); sfx('tick'); });
+{ try { Object.assign(BIT, JSON.parse(localStorage.getItem('inknine-bit') || '{}')); } catch (_) {} if (!PALETTES[BIT.pal]) BIT.pal = 'Retro 16'; setBit(true); $('bitPanel').hidden = STYLES[C3.style].name !== '8-bit'; }

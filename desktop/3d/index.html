@@ -40,7 +40,15 @@
 #stylePick{position:fixed;right:28px;bottom:204px;z-index:6;display:flex;align-items:center;gap:2px;border:2.5px solid var(--ink);border-radius:999px;background:var(--paper);box-shadow:3px 4px 0 var(--ink);font:800 13px var(--ui);padding:2px}
 #stylePick span{min-width:112px;text-align:center}
 #engPanel{position:fixed;left:28px;top:128px;z-index:6;width:224px;display:grid;gap:4px;border:2.5px solid var(--ink);border-radius:16px;background:var(--paper);box-shadow:3px 4px 0 var(--ink);padding:10px 14px 8px;font:700 12.5px var(--ui)}
-#engPanel[hidden]{display:none}
+#engPanel[hidden],#bitPanel[hidden]{display:none}
+#bitPanel{position:fixed;left:28px;top:128px;z-index:6;width:224px;display:grid;gap:4px;border:2.5px solid var(--ink);border-radius:16px;background:var(--paper);box-shadow:3px 4px 0 var(--ink);padding:10px 14px 8px;font:700 12.5px var(--ui)}
+#bitPanel b{font-family:var(--display);font-style:italic;font-weight:900;font-size:16px}
+#bitPanel label{display:flex;justify-content:space-between;margin-top:4px}#bitPanel label span{color:var(--soft)}#bitPanel .lab{margin-top:6px}
+#bitPanel input[type=range]{width:100%;accent-color:#000;cursor:pointer}#bitPanel .linkbtn{justify-self:end;font-size:12px}
+#bitPals{display:grid;gap:4px}
+#bitPals button{appearance:none;display:flex;align-items:center;gap:8px;border:2px solid var(--ink);border-radius:10px;background:var(--paper);color:var(--ink);font:800 12px var(--ui);padding:4px 8px;cursor:pointer;text-align:left}
+#bitPals button.on{background:var(--ink);color:var(--paper)}
+#bitPals i{display:flex}#bitPals s{display:block;width:8px;height:12px}
 #engPanel b{font-family:var(--display);font-style:italic;font-weight:900;font-size:16px}
 #engPanel label{display:flex;justify-content:space-between;margin-top:4px}#engPanel label span{color:var(--soft)}
 #engPanel input[type=range]{width:100%;accent-color:#000;cursor:pointer}
@@ -102,6 +110,13 @@
   <label for="engS">Line spacing <span id="engSv">5 px</span></label><input id="engS" type="range" min="2.5" max="12" step="0.5" value="5">
   <label for="engO">Outlines <span id="engOv">100%</span></label><input id="engO" type="range" min="0" max="1.5" step="0.05" value="1">
   <button type="button" id="engReset" class="linkbtn">Reset</button>
+</div>
+<div id="bitPanel" hidden role="group" aria-label="8-bit settings">
+  <b>8-bit</b>
+  <label for="bitPx">Pixel size <span id="bitPxv">4 px</span></label><input id="bitPx" type="range" min="1" max="10" step="1" value="4">
+  <span class="lab">Palette</span><div id="bitPals"></div>
+  <label for="bitD">Dither <span id="bitDv">70%</span></label><input id="bitD" type="range" min="0" max="1.5" step="0.05" value="0.7">
+  <button type="button" id="bitReset" class="linkbtn">Reset</button>
 </div>
 <div id="stylePick" role="group" aria-label="Style"><button id="styPrev" type="button" aria-label="Previous style">‹</button><span id="styName">Realistic</span><button id="styNext" type="button" aria-label="Next style">›</button></div>
 <button id="viewBtn" type="button">Behind the ball<kbd>V</kbd></button>
