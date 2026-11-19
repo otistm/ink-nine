@@ -210,13 +210,15 @@ const BAYER = (() => { const m = [[0]]; let M = m;
   const t = new THREE.DataTexture(d, 8, 8, THREE.RGBFormat); t.minFilter = t.magFilter = THREE.NearestFilter; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.generateMipmaps = false; t.needsUpdate = true; return t; })();
 const POST_VS = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }';
 // The styles you can flip between with [ and ]. "depth" styles also read how far away each pixel is, to draw outlines.
+// Engraving's three dials (tuned live with the sliders that appear when Engraving is on)
+const ENG = { i: 1, s: 5, o: 1 };
 const STYLES = [
   { name: 'Realistic' }, { name: 'Black and white' }, { name: '1-bit dither' },
   { name: 'Ink and wash', depth: true }, { name: 'Watercolour', depth: true }, { name: 'Engraving', depth: true },
   { name: 'Risograph', depth: true }, { name: 'Gouache poster', depth: true }, { name: 'Blueprint', depth: true }
 ];
 const POST_FS = `
-uniform sampler2D tColor, tDepth, bayer; uniform float style, cell, exposure, cn, cf; uniform vec2 res; varying vec2 vUv;
+uniform sampler2D tColor, tDepth, bayer; uniform float style, cell, exposure, cn, cf, engI, engS, engO; uniform vec2 res; varying vec2 vUv;
 vec3 aces(vec3 x){ return clamp((x * (2.51 * x + .03)) / (x * (2.43 * x + .59) + .14), 0., 1.); }
 vec3 tone(vec2 uv){ return pow(aces(texture2D(tColor, uv).rgb * exposure), vec3(1. / 2.2)); }
 float luma(vec3 c){ return dot(c, vec3(.2126, .7152, .0722)); }
@@ -265,9 +267,10 @@ void main(){
     c = mix(c, vec3(1.), smoothstep(.68, .9, luma(c)) * .85);               // white paper left showing in the highlights
     col = c * vec3(.99, .97, .92) * (.9 + .1 * fbm(sp * .8));
   } else if (style < 5.5) {                              // engraving: crosshatched lines that swell with the shade
-    float l = clamp((luma(tone(uv)) - .5) * 1.25 + .72, 0., 1.);
-    float ink = max(max(lineM((sp.x + sp.y) / 5. + l * 2., clamp((.9 - l) * .9, 0., .5) * .9), lineM((sp.x - sp.y) / 5., clamp((.6 - l) * 1.1, 0., .5) * .9)), lineM(sp.y / 4., clamp((.3 - l) * 1.4, 0., .5) * .9));
-    float e = max(depthEdge(uv, 1.), smoothstep(.3, .6, lumEdge(uv, 1.)));
+    // engI: intensity (how dark and dense), engS: line spacing in pixels, engO: outline strength
+    float l = clamp((luma(tone(uv)) - .5) * 1.25 + .72 + (1. - engI) * .32, 0., 1.), k = .55 + .45 * engI;
+    float ink = max(max(lineM((sp.x + sp.y) / engS + l * 2., clamp((.9 - l) * .9 * k, 0., .5) * .9), lineM((sp.x - sp.y) / engS, clamp((.6 - l) * 1.1 * k, 0., .5) * .9)), lineM(sp.y / (engS * .8), clamp((.3 - l) * 1.4 * k, 0., .5) * .9));
+    float e = max(depthEdge(uv, 1. + engS * .08), smoothstep(.3, .6, lumEdge(uv, 1.))) * engO;
     col = mix(vec3(.96, .93, .84), vec3(.12, .09, .07), max(ink, e));
   } else if (style < 6.5) {                              // risograph: two inks in halftone dots, slightly out of register
     vec3 c = tone(uv), c2 = tone(uv + vec2(2.5, -1.5) / res);
@@ -328,7 +331,7 @@ function build3D(h) {
     renderer.setPixelRatio(DPR); renderer.setSize(W, Hh, false);
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.shadowMap.autoUpdate = false;
     const post = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ vertexShader: POST_VS, fragmentShader: POST_FS, depthTest: false, depthWrite: false,
-      uniforms: { tColor: { value: null }, tDepth: { value: null }, bayer: { value: BAYER }, style: { value: C3.style }, cell: { value: 2 * DPR }, exposure: { value: .82 }, res: { value: new THREE.Vector2() }, cn: { value: .05 }, cf: { value: 12000 } } }));
+      uniforms: { tColor: { value: null }, tDepth: { value: null }, bayer: { value: BAYER }, style: { value: C3.style }, cell: { value: 2 * DPR }, exposure: { value: .82 }, res: { value: new THREE.Vector2() }, cn: { value: .05 }, cf: { value: 12000 }, engI: { value: ENG.i }, engS: { value: ENG.s }, engO: { value: ENG.o } } }));
     const postScene = new THREE.Scene(); postScene.add(post);
     three = { renderer, camera: new THREE.PerspectiveCamera(48, W / Hh, .05, 12000), post, postScene, postCam: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1),
       sunDir: new THREE.Vector3(-.55, .44, .7).normalize(), haze: new THREE.Color(.75, .8, .85) };
@@ -639,7 +642,7 @@ $('lookhint').firstElementChild.textContent = 'The whole hole from above. Press 
 function setStyle(i, quiet) {
   C3.style = (i + STYLES.length) % STYLES.length; try { localStorage.setItem('inknine-style', String(C3.style)); } catch (_) {}
   if (three) three.post.material.uniforms.style.value = C3.style;
-  $('styName').textContent = STYLES[C3.style].name; $('stylePick').setAttribute('aria-label', `Style: ${STYLES[C3.style].name}`);
+  $('styName').textContent = STYLES[C3.style].name; $('engPanel').hidden = STYLES[C3.style].name !== 'Engraving'; $('stylePick').setAttribute('aria-label', `Style: ${STYLES[C3.style].name}`);
   if (!quiet) { sfx('tick'); tone(500 + C3.style * 60, .12, 'sine', .06); callout(STYLES[C3.style].name, `Style ${C3.style + 1} of ${STYLES.length}`); }
 }
 $('styPrev').addEventListener('click', () => { audioInit(); setStyle(C3.style - 1); $('styPrev').blur(); });
@@ -648,3 +651,15 @@ addEventListener('keydown', e => { if (!$('card').hidden || e.ctrlKey || e.metaK
   if (e.key === '[') { e.preventDefault(); $('styPrev').click(); }
   if (e.key === ']') { e.preventDefault(); $('styNext').click(); } });
 { let i = 0; try { i = parseInt(localStorage.getItem('inknine-style') || '0', 10) || 0; } catch (_) {} setStyle(Math.max(0, Math.min(STYLES.length - 1, i)), true); }
+
+// Engraving dials: sliders write straight into the shader; remembered between visits
+function setEng(quiet) {
+  if (three) { const u = three.post.material.uniforms; u.engI.value = ENG.i; u.engS.value = ENG.s; u.engO.value = ENG.o; }
+  $('engI').value = ENG.i; $('engS').value = ENG.s; $('engO').value = ENG.o;
+  $('engIv').textContent = Math.round(ENG.i * 100) + '%'; $('engSv').textContent = ENG.s.toFixed(1) + ' px'; $('engOv').textContent = Math.round(ENG.o * 100) + '%';
+  if (!quiet) try { localStorage.setItem('inknine-eng', JSON.stringify(ENG)); } catch (_) {}
+}
+[['engI', 'i'], ['engS', 's'], ['engO', 'o']].forEach(([id, k]) => $(id).addEventListener('input', e => { ENG[k] = parseFloat(e.target.value); setEng(); }));
+$('engReset').addEventListener('click', () => { Object.assign(ENG, { i: 1, s: 5, o: 1 }); setEng(); sfx('tick'); });
+['engI', 'engS', 'engO'].forEach(id => $(id).addEventListener('keydown', e => e.stopPropagation()));   // arrow keys move the slider, not the aim
+{ try { Object.assign(ENG, JSON.parse(localStorage.getItem('inknine-eng') || '{}')); } catch (_) {} setEng(true); $('engPanel').hidden = STYLES[C3.style].name !== 'Engraving'; }

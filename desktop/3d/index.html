@@ -39,6 +39,12 @@
 #viewBtn kbd{margin:0 0 0 6px}
 #stylePick{position:fixed;right:28px;bottom:204px;z-index:6;display:flex;align-items:center;gap:2px;border:2.5px solid var(--ink);border-radius:999px;background:var(--paper);box-shadow:3px 4px 0 var(--ink);font:800 13px var(--ui);padding:2px}
 #stylePick span{min-width:112px;text-align:center}
+#engPanel{position:fixed;left:28px;top:128px;z-index:6;width:224px;display:grid;gap:4px;border:2.5px solid var(--ink);border-radius:16px;background:var(--paper);box-shadow:3px 4px 0 var(--ink);padding:10px 14px 8px;font:700 12.5px var(--ui)}
+#engPanel[hidden]{display:none}
+#engPanel b{font-family:var(--display);font-style:italic;font-weight:900;font-size:16px}
+#engPanel label{display:flex;justify-content:space-between;margin-top:4px}#engPanel label span{color:var(--soft)}
+#engPanel input[type=range]{width:100%;accent-color:#000;cursor:pointer}
+#engPanel .linkbtn{justify-self:end;font-size:12px}
 #stylePick button{appearance:none;border:0;background:none;width:30px;height:30px;border-radius:50%;font:900 20px var(--ui);line-height:1;cursor:pointer;color:var(--ink)}
 #stylePick button:hover{background:var(--ink);color:var(--paper)}#stylePick button:focus-visible{outline:3px solid var(--ink)}</style>
 </head>
@@ -90,6 +96,13 @@
     <path d="M15.2 17 L10.5 28.5 M15.2 17 L20 28.5 M15.2 17 L15.2 28.5"/>
   </svg>
 </button>
+<div id="engPanel" hidden role="group" aria-label="Engraving settings">
+  <b>Engraving</b>
+  <label for="engI">Intensity <span id="engIv">100%</span></label><input id="engI" type="range" min="0" max="2" step="0.05" value="1">
+  <label for="engS">Line spacing <span id="engSv">5 px</span></label><input id="engS" type="range" min="2.5" max="12" step="0.5" value="5">
+  <label for="engO">Outlines <span id="engOv">100%</span></label><input id="engO" type="range" min="0" max="1.5" step="0.05" value="1">
+  <button type="button" id="engReset" class="linkbtn">Reset</button>
+</div>
 <div id="stylePick" role="group" aria-label="Style"><button id="styPrev" type="button" aria-label="Previous style">‹</button><span id="styName">Realistic</span><button id="styNext" type="button" aria-label="Next style">›</button></div>
 <button id="viewBtn" type="button">Behind the ball<kbd>V</kbd></button>
 <button id="pause" type="button" aria-label="Pause">
