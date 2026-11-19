@@ -110,13 +110,23 @@ function paintSplat(h, bb, ppy) {
     sg.setTransform(1, 0, 0, 1, 0, 0); sg.globalCompositeOperation = 'source-over'; sg.clearRect(0, 0, w, hgt); sg.filter = soft ? `blur(${soft * ppy}px)` : 'none';
     sg.fillStyle = sg.strokeStyle = '#000'; shapes.forEach(s => shapePath(sg, s, grow)); sg.filter = 'none'; sg.globalCompositeOperation = 'source-in'; paint(sg); g.drawImage(scratch, 0, 0);
   };
-  g.fillStyle = 'rgb(150,0,0)'; g.fillRect(0, 0, w, hgt);                                      // rough
-  layer(h.fair, 1.8, .6, c => { c.fillStyle = 'rgb(178,0,90)'; c.fillRect(0, 0, w, hgt); });     // first cut
-  layer(h.fair, 0, .25, c => stripes(c, 'rgb(212,0,255)', 'rgb(196,0,255)', 7, d));             // fairway, mown in stripes
-  const fringe = h.green.map(s => ({ ...s, rx: s.rx + 1.6, ry: s.ry + 1.6 }));
-  layer(fringe, 0, .3, c => { c.fillStyle = 'rgb(214,0,255)'; c.fillRect(0, 0, w, hgt); });
-  layer(h.green, 0, .2, c => stripes(c, 'rgb(236,0,255)', 'rgb(226,0,255)', 2.2, d + Math.PI / 2)); // green
-  layer([TEE_RECT(h)], 0, .2, c => stripes(c, 'rgb(220,0,255)', 'rgb(208,0,255)', 1.4, d + Math.PI / 2));
+  // checkerboard mowing: square cells turned to the line of play, alternating light and dark
+  const checks = (c, a, b, cellYd, ang) => { c.fillStyle = a; c.fillRect(0, 0, w, hgt); c.save(); c.translate(w / 2, hgt / 2); c.rotate(ang); c.fillStyle = b;
+    const L = Math.hypot(w, hgt), cs = cellYd * ppy; for (let x = -L, i = 0; x < L; x += cs, i++) for (let y = -L, j = 0; y < L; y += cs, j++) if ((i + j) % 2) c.fillRect(x, y, cs + .5, cs + .5); c.restore(); };
+  // a ring just inside a group of shapes (the mower's clean-up lap around a green)
+  const ring = (shapes, inset, width, col) => {
+    sg.setTransform(1, 0, 0, 1, 0, 0); sg.globalCompositeOperation = 'source-over'; sg.clearRect(0, 0, w, hgt); sg.fillStyle = sg.strokeStyle = '#000';
+    shapes.forEach(s => shapePath(sg, s, -inset)); sg.globalCompositeOperation = 'destination-out'; shapes.forEach(s => shapePath(sg, s, -inset - width));
+    sg.globalCompositeOperation = 'source-in'; sg.fillStyle = col; sg.fillRect(0, 0, w, hgt); g.drawImage(scratch, 0, 0);
+  };
+  g.fillStyle = 'rgb(108,0,0)'; g.fillRect(0, 0, w, hgt);                                      // rough: darkest
+  layer(h.fair, 2.2, .5, c => { c.fillStyle = 'rgb(150,0,70)'; c.fillRect(0, 0, w, hgt); });     // first cut
+  layer(h.fair, 0, .12, c => stripes(c, 'rgb(226,0,255)', 'rgb(168,0,255)', 8, d));             // fairway: bold, crisp stripes
+  const fringe = h.green.map(s => ({ ...s, rx: s.rx + 1.8, ry: s.ry + 1.8 }));
+  layer(fringe, 0, .15, c => { c.fillStyle = 'rgb(210,0,255)'; c.fillRect(0, 0, w, hgt); });    // collar
+  layer(h.green, 0, .1, c => checks(c, 'rgb(250,0,255)', 'rgb(222,0,255)', 2.6, d + Math.PI / 4)); // green: checkerboard
+  ring(h.green, .45, .8, 'rgb(214,0,255)');                                                      // clean-up lap
+  layer([TEE_RECT(h)], 0, .1, c => stripes(c, 'rgb(236,0,255)', 'rgb(206,0,255)', 1.4, d + Math.PI / 2));
   layer(h.sand, 0, .15, c => { c.fillStyle = 'rgb(200,255,0)'; c.fillRect(0, 0, w, hgt); });
   // soft shade on the grass under each tree's crown
   g.globalCompositeOperation = 'multiply';
@@ -131,9 +141,9 @@ function worldAware(mat, opts) {
   mat.onBeforeCompile = sh => {
     Object.assign(sh.uniforms, opts.uniforms || {});
     const decl = Object.entries(opts.uniforms || {}).map(([k, u]) => `uniform ${u.type} ${k};`).join('\n');
-    sh.vertexShader = 'varying vec3 vWp;\n' + decl + '\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n' + (opts.vertex || '') +
+    sh.vertexShader = 'varying vec3 vWp;\n' + (opts.varyings || '') + '\n' + decl + '\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n' + (opts.vertex || '') +
       '\n#ifdef USE_INSTANCING\n vWp = (modelMatrix * instanceMatrix * vec4(transformed, 1.)).xyz;\n#else\n vWp = (modelMatrix * vec4(transformed, 1.)).xyz;\n#endif');
-    sh.fragmentShader = 'varying vec3 vWp;\n' + decl + '\n' + sh.fragmentShader
+    sh.fragmentShader = 'varying vec3 vWp;\n' + (opts.varyings || '') + '\n' + decl + '\n' + sh.fragmentShader
       .replace('#include <map_fragment>', '#include <map_fragment>\n' + (opts.afterMap || ''))
       .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + (opts.afterNormal || ''))
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n' + (opts.afterRough || ''));
@@ -214,7 +224,7 @@ function treeVariant(seed) {   // a tree of crown radius 1, trunk base at the or
   const cluster = (c, size, count) => {
     for (let k = 0; k < count; k++) {
       const q = new THREE.Vector3(r() * 2 - 1, r() * 2 - 1, r() * 2 - 1); if (q.lengthSq() > 1) { k--; continue; }
-      const ctr = c.clone().addScaledVector(q, size), sz = .17 + r() * .1, n = ctr.clone().sub(crownC).normalize();
+      const ctr = c.clone().addScaledVector(q, size), sz = .2 + r() * .13, n = ctr.clone().sub(crownC).normalize();
       const ax = new THREE.Vector3(r() - .5, r() - .5, r() - .5).normalize(), ay = new THREE.Vector3().crossVectors(ax, n).normalize().multiplyScalar(sz);
       const bx = ax.clone().multiplyScalar(sz), cell = (r() * 4) | 0, u0 = (cell % 2) * .5, v0 = ((cell / 2) | 0) * .5;
       const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]], p = { pos: [], nrm: [], uv: [], idx: [0, 1, 2, 0, 2, 3] };
@@ -224,7 +234,7 @@ function treeVariant(seed) {   // a tree of crown radius 1, trunk base at the or
   };
   const grow = (a, dir, len, rad, depth) => {
     const b = a.clone().addScaledVector(dir, len); tube(a, b, rad, rad * .7);
-    if (depth === 0) { cluster(b, .3 + r() * .1, 46); return; }
+    if (depth === 0) { cluster(b, .36 + r() * .12, 30); return; }   // fewer, bigger leaves in looser clumps: gaps you can see through
     const n = depth >= 3 ? 3 + (r() < .4 ? 1 : 0) : 2 + (r() < .5 ? 1 : 0);
     for (let k = 0; k < n; k++) {
       const spread = .45 + r() * .45, az = k / n * TAU + r() * 1.2, out = new THREE.Vector3(Math.cos(az), 0, Math.sin(az));
@@ -278,7 +288,7 @@ function loadSky() {
     for (let x = 0; x < w; x += 4) { const i = ((hh / 2 - 6 | 0) * w + x) * 4; hz[0] += halfToFloat(data[i]); hz[1] += halfToFloat(data[i + 1]); hz[2] += halfToFloat(data[i + 2]); hn++; }
     const u = (bi % w) / w, v = 1 - Math.floor(bi / w) / hh, th = (u - .5) * TAU, ph = (v - .5) * Math.PI;
     T.sunDir = new THREE.Vector3(Math.cos(ph) * Math.cos(th), Math.sin(ph), Math.cos(ph) * Math.sin(th)).normalize();
-    if (T.sunDir.y < .25) { T.sunDir.y = .25; T.sunDir.normalize(); }
+    { const hz = Math.hypot(T.sunDir.x, T.sunDir.z) || 1, el = .46; T.sunDir.set(T.sunDir.x / hz * Math.cos(el), Math.sin(el), T.sunDir.z / hz * Math.cos(el)); }   // a lower sun: long shadows read best from above
     T.sky = t; T.haze = new THREE.Color(hz[0] / hn, hz[1] / hn, hz[2] / hn);
     applySky();
   });
@@ -300,7 +310,7 @@ function build3D(h) {
       uniforms: { tColor: { value: null }, bayer: { value: BAYER }, mode: { value: styleMode() }, cell: { value: 2 * DPR }, exposure: { value: .82 }, seed: { value: 0 } } }));
     const postScene = new THREE.Scene(); postScene.add(post);
     three = { renderer, camera: new THREE.PerspectiveCamera(48, W / Hh, .05, 12000), post, postScene, postCam: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1),
-      sunDir: new THREE.Vector3(-.4, .75, .5).normalize(), haze: new THREE.Color(.75, .8, .85) };
+      sunDir: new THREE.Vector3(-.55, .44, .7).normalize(), haze: new THREE.Color(.75, .8, .85) };
     makeTargets(); loadSky();
     const an = renderer.capabilities.getMaxAnisotropy(); Object.values(TEX).forEach(t => { t.anisotropy = an; });
   }
@@ -321,12 +331,17 @@ function build3D(h) {
       if (useD > .5) { vec2 q = (vWp.xz - dRect.xy) / (dRect.zw - dRect.xy);
         if (q.x > 0. && q.x < 1. && q.y > 0. && q.y < 1.) { float e = min(min(q.x, 1. - q.x), min(q.y, 1. - q.y)); sp = mix(sp, texture2D(splatD, vec2(q.x, 1. - q.y)), smoothstep(0., .1, e)); } }
       vec3 macro = mapTexelToLinear(texture2D(map, vWp.xz * .021)).rgb;
-      vec3 grass = diffuseColor.rgb * mix(vec3(1.), macro * 2.2, .4) * vec3(.55, .85, .32) * 1.9;
-      grass = mix(grass * vec3(.95, .9, .8), grass * vec3(1.05, 1.12, 1.), sp.b);
+      // rough: the photo texture at full strength, coarse and varied. Short grass: a softened sample of the same
+      // texture (its stones and clumps averaged away) for a fine, even turf.
+      vec3 roughC = diffuseColor.rgb * mix(vec3(1.), macro * 2.2, .55) * vec3(.46, .74, .27) * 1.9;
+      vec3 soft = mapTexelToLinear(texture2D(map, vWp.xz * .9, 3.)).rgb;
+      vec3 shortC = mix(soft, diffuseColor.rgb, .18) * mix(vec3(1.), macro * 2.2, .2) * vec3(.42, .82, .28) * 1.75;
+      vec3 grass = mix(roughC, shortC, sp.b);
       vec3 sandc = mapTexelToLinear(texture2D(sandMap, vWp.xz * .32)).rgb * vec3(1.15, 1.07, .92);
       diffuseColor.rgb = mix(grass * sp.r * 1.25, sandc, sp.g);
       float sandAmt = sp.g;`,
-    afterRough: 'roughnessFactor = mix(roughnessFactor, .97, sandAmt);' });
+    afterRough: 'roughnessFactor = mix(roughnessFactor, .97, sandAmt);',
+    afterNormal: 'normal = normalize(mix(normal, normalize(vNormal), sp.b * .75));' });   // short turf is smooth
   const STEP = 1, nx = Math.ceil((bb.x1 - bb.x0) / STEP) + 1, ny = Math.ceil((bb.y1 - bb.y0) / STEP) + 1;
   const pos = new Float32Array(nx * ny * 3), uv = new Float32Array(nx * ny * 2), idx = new Uint32Array((nx - 1) * (ny - 1) * 6);
   for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
@@ -357,14 +372,18 @@ function build3D(h) {
   // trees: four grown variants, instanced for the hole's trees and a forest line beyond it
   const leafMap = leafAtlas(), variants = [11, 23, 37, 53].map(treeVariant);
   const barkMat = new THREE.MeshStandardMaterial({ map: TEX.bark, normalMap: TEX.barkN, roughness: .95, color: 0xb8ad9c });
-  const leafMat = worldAware(new THREE.MeshStandardMaterial({ map: leafMap, alphaTest: .5, side: THREE.DoubleSide, roughness: .8, color: 0x7d8c66, envMapIntensity: .55 }), { uniforms: U,
-    vertex: 'vec3 ip = vec3(instanceMatrix[3].x, 0., instanceMatrix[3].z); float hy = position.y * .35; transformed.x += (sin(time * 1.6 + ip.x * .13 + position.y * 2.) * .03 + wind.x * .06) * hy; transformed.z += (cos(time * 1.3 + ip.z * .11 + position.x * 2.) * .03 + wind.y * .06) * hy;' });
+  const leafMat = worldAware(new THREE.MeshStandardMaterial({ map: leafMap, alphaTest: .5, side: THREE.DoubleSide, roughness: .75, color: 0xbccb94, envMapIntensity: .7 }), { uniforms: U, varyings: 'varying float vTop;',
+    afterMap: 'diffuseColor.rgb *= .62 + .55 * vTop;',   // crowns brighten toward the sunlit top
+    vertex: 'vTop = smoothstep(.4, 2.3, position.y); vec3 ip = vec3(instanceMatrix[3].x, 0., instanceMatrix[3].z); float hy = position.y * .35; transformed.x += (sin(time * 1.6 + ip.x * .13 + position.y * 2.) * .03 + wind.x * .06) * hy; transformed.z += (cos(time * 1.3 + ip.z * .11 + position.x * 2.) * .03 + wind.y * .06) * hy;' });
   const leafDepth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: leafMap, alphaTest: .5 });
   const plants = [];   // [x, y, r, variant]
   h.trees.forEach((tr, i) => plants.push([tr[0], tr[1], tr[2], i % 4]));
   { const route = [h.tee, ...h.fair.filter(s => s.t === 'c').flatMap(s => s.pts), h.cup], rnd = seeded(7);
-    const clear = (x, y) => !(inAny(h.fair, x, y) || inAny(h.green, x, y) || inAny(h.water, x, y) || inAny(h.sand, x, y)) && Math.hypot(x - h.tee[0], y - h.tee[1]) > 25
-      && route.every((p, k) => k === route.length - 1 || segDist(x, y, p, route[k + 1]) > 48) && plants.every(p => Math.hypot(p[0] - x, p[1] - y) > p[2] + 5);
+    // keep the forest well back from anything in play, so the corridor of the hole is obvious from above
+    let x0_ = 0, y0_ = 0;
+    const gap = (list, yd) => list.some(sh => sh.t === 'c' ? (qShape(sh, x0_, y0_) - 1) * sh.r < yd : sh.t === 'e' ? (qShape(sh, x0_, y0_) - 1) * Math.min(sh.rx, sh.ry) < yd : false);
+    const clear = (x, y) => { x0_ = x; y0_ = y; return !gap(h.fair, 16) && !gap(h.green, 18) && !gap(h.water, 8) && !gap(h.sand, 8) && Math.hypot(x - h.tee[0], y - h.tee[1]) > 30
+      && route.every((p, k) => k === route.length - 1 || segDist(x, y, p, route[k + 1]) > 60) && plants.every(p => Math.hypot(p[0] - x, p[1] - y) > p[2] + 5); };
     for (let k = 0; k < 900 && plants.length < h.trees.length + 170; k++) {
       const a = route[(rnd() * (route.length - 1)) | 0], t = rnd() * 2 - .5, x = a[0] + (rnd() * 2 - 1) * 200, y = a[1] + t * 120;
       if (clear(x, y)) plants.push([x, y, 6 + rnd() * 6, (rnd() * 4) | 0]); }
@@ -372,7 +391,9 @@ function build3D(h) {
   variants.forEach((v, vi) => {
     const mine = plants.filter(p => p[3] === vi), o = new THREE.Object3D(), rnd = seeded(vi + 3);
     const bm = new THREE.InstancedMesh(v.bark, barkMat, mine.length), lm = new THREE.InstancedMesh(v.leaves, leafMat, mine.length);
-    mine.forEach(([x, y, r], k) => { o.position.set(x, groundY(h, x, y) - .1, y); o.rotation.set(0, rnd() * TAU, 0); o.scale.setScalar(r); o.updateMatrix(); bm.setMatrixAt(k, o.matrix); lm.setMatrixAt(k, o.matrix); });
+    const tint = new THREE.Color();   // each tree its own shade of green
+    mine.forEach(([x, y, r], k) => { o.position.set(x, groundY(h, x, y) - .1, y); o.rotation.set(0, rnd() * TAU, 0); o.scale.setScalar(r); o.updateMatrix(); bm.setMatrixAt(k, o.matrix); lm.setMatrixAt(k, o.matrix);
+      tint.setHSL(.2 + rnd() * .07, .25 + rnd() * .3, .42 + rnd() * .22); lm.setColorAt(k, tint); });
     bm.castShadow = bm.receiveShadow = lm.castShadow = lm.receiveShadow = true; lm.customDepthMaterial = leafDepth;
     scene.add(bm, lm);
   });
@@ -405,9 +426,17 @@ function build3D(h) {
   const bc = document.createElement('canvas'); bc.width = 256; bc.height = 128; const bx = bc.getContext('2d'); bx.fillStyle = '#fafafa'; bx.fillRect(0, 0, 256, 128);
   bx.strokeStyle = '#2a2a2a'; bx.lineWidth = 4; bx.beginPath(); bx.moveTo(40, 64); bx.lineTo(92, 64); bx.stroke(); bx.font = '700 22px Figtree, sans-serif'; bx.fillStyle = '#2a2a2a'; bx.fillText('INK 9', 100, 72);
   const bt = new THREE.CanvasTexture(bc); bt.encoding = THREE.sRGBEncoding;
-  const ballMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 24), new THREE.MeshStandardMaterial({ map: bt, roughness: .3 })); ballMesh.castShadow = true;
+  const ballMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 24), new THREE.MeshStandardMaterial({ map: bt, roughness: .3 })); ballMesh.castShadow = false;
   const ballSquash = new THREE.Group(), ballStretch = new THREE.Group(), ballSpin = new THREE.Group(); ballSquash.add(ballStretch); ballStretch.add(ballSpin); ballSpin.add(ballMesh); scene.add(ballSquash);
-  Object.assign(T, { flag, spring, cloth, clothBase: clothGeo.attributes.position.array.slice(), ballSquash, ballStretch, ballSpin, ballMesh, lastBall: null });
+  // the ball's shadow: dark and tight on the ground, slipping away along the sunlight and fading as the ball climbs
+  const shc = document.createElement('canvas'); shc.width = shc.height = 64; const sx = shc.getContext('2d'), sgr = sx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  sgr.addColorStop(0, 'rgba(0,0,0,.85)'); sgr.addColorStop(.55, 'rgba(0,0,0,.45)'); sgr.addColorStop(1, 'rgba(0,0,0,0)'); sx.fillStyle = sgr; sx.fillRect(0, 0, 64, 64);
+  const ballShadow = new THREE.Mesh(new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(shc), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
+  ballShadow.renderOrder = 3; scene.add(ballShadow);
+  // a faint white ring around the cup so the hole location reads from altitude
+  const cupRing = new THREE.Mesh(new THREE.RingGeometry(1.05, 1.25, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
+  cupRing.position.set(cx, cz + .02, cy); cupRing.renderOrder = 3; scene.add(cupRing);
+  Object.assign(T, { ballShadow, flag, spring, cloth, clothBase: clothGeo.attributes.position.array.slice(), ballSquash, ballStretch, ballSpin, ballMesh, lastBall: null });
   applySky();
   C3.ready = true;
 }
@@ -508,6 +537,10 @@ function animateBall(t, dt, h) {
   if (T.lastBall) { const mx = x - T.lastBall.x, mz = z - T.lastBall.z, md = Math.hypot(mx, mz);
     if (md > 1e-4 && md < 30) { _axis.set(mz, 0, -mx).normalize(); T.ballSpin.quaternion.premultiply(_q.setFromAxisAngle(_axis, md / Math.max(br, .05) * (b.mode === 'air' ? .25 : 1))); } }
   T.lastBall = { x, z };
+  // the shadow shows height from above: it sits under the ball on the ground and slides away along the sunlight as it rises
+  const gy = groundY(h, x, z), up = Math.max(0, y - gy), sd = T.sunDir, k2 = up / Math.max(.2, sd.y);
+  T.ballShadow.visible = T.ballSquash.visible; T.ballShadow.position.set(x - sd.x * k2, groundY(h, x - sd.x * k2, z - sd.z * k2) + .03, z - sd.z * k2);
+  T.ballShadow.scale.setScalar(Math.max(br * 1.4, .07) * (1 + up * .04) * scale); T.ballShadow.material.opacity = Math.max(.18, .75 - up * .02);
 }
 function animateWorld(t, dt, h) {
   const T = three, w = S.wind, wl = Math.hypot(w.x, w.y) || 1;
@@ -531,6 +564,7 @@ draw = function (t, dt) {
   if (!three || !three.scene) return;
   const h = H(), b = S.ball, T = three, r = T.renderer;
   updateCamera(t, dt); animateBall(t, dt, h); animateWorld(t, dt, h);
+  T.grass.visible = T.camera.position.y - groundY(h, b.x, b.y) < 45;   // blades are invisible fuzz from high up
   r.shadowMap.needsUpdate = true;
   r.setRenderTarget(T.rt); r.render(T.scene, T.camera);
   r.setRenderTarget(null); r.render(T.postScene, T.postCam);
@@ -541,6 +575,10 @@ draw = function (t, dt) {
     const c = CLUBS[S.club], reach = c.putter ? Math.min(distToCup(), 30) : Math.min(reachFor(c, lieNow()), distToCup());
     cam.z = S.state === 'aim' ? pxPerYard(b.x + Math.cos(C3.yaw) * reach * .6, b.y + Math.sin(C3.yaw) * reach * .6) : pxPerYard(b.x, b.y);
     drawParts(dt, true);
+    if (T.ballSquash.visible && S.state !== 'card') { const bp = T.ballSquash.position, v = _v.copy(bp).project(T.camera);   // a ring so the ball is never lost
+      if (v.z < 1) { const px = (v.x * .5 + .5) * W, py = (-v.y * .5 + .5) * Hh, pulse = 1 + Math.sin(t * 4) * .08;
+        ctx.save(); ctx.lineWidth = 3.5; ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.arc(px, py, 11 * pulse, 0, TAU); ctx.stroke();
+        ctx.lineWidth = 1.8; ctx.strokeStyle = '#fff'; ctx.beginPath(); ctx.arc(px, py, 11 * pulse, 0, TAU); ctx.stroke(); ctx.restore(); } }
     if (S.state === 'aim' && !look.on) drawAim(t);
     drawTrail();
     drawParts(dt, false);
