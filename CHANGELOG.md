@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.23.0
+- New desktop edition at /desktop/, the first step toward a bigger game for computers. It plays the same holes with the phone game's swing, laid out for a wide screen and a mouse.
+- Your clubs sit down the right edge. Press 1 to 8 to pick one. Space looks around the hole, W explains the wind, the up and down arrows move the strike point, and P pauses.
+- Scroll to zoom and right-drag to pan anywhere on the hole. A map of the whole hole sits in the top-left corner. Click it to look at that spot.
+- Hover over the course to see how far a spot is from your ball and from the pin, and what surface it is.
+- More ink detail: contour lines show the shape of the ground, trees have leaf clusters and hatched shadows, bunkers have shaded lips, the rough has finer grass, and disc markers sit in the fairway at 100, 150, 200 and 250 yards from the pin.
+- The desktop edition keeps its own saved progress, separate from the phone game. For now its rounds stay on your computer and don't appear on the leaderboard.
+- The front page shows a link to the desktop edition on computers.
+
 ## 0.22.0
 - Tutorial tips no longer disappear on their own. After the 5-second bar fills, a small X appears in the corner. Tap it to tuck the tip away until you do what it asks, and the next tip appears as before.
 

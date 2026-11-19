@@ -58,6 +58,8 @@ h1{font-family:var(--display);font-style:italic;font-weight:900;font-size:clamp(
 .install[hidden],.ios[hidden]{display:none}
 .ios{margin:14px 0 0;font-size:13px;font-weight:600;color:var(--soft);line-height:1.4}
 .ios b{color:var(--ink)}
+.desk{display:none;margin:12px 0 0;font-weight:800;font-size:15px;color:var(--ink)}
+@media (min-width:900px) and (pointer:fine){ .desk{display:block} }
 footer{margin-top:12px;font-size:12px;font-weight:600;color:var(--soft)}
 @media (prefers-reduced-motion:reduce){.card{animation:none}}
 </style>
@@ -69,6 +71,7 @@ footer{margin-top:12px;font-size:12px;font-weight:600;color:var(--soft)}
     <h1>Ink Nine</h1>
     <p class="tag">Play golf. Do well. Get trophies.</p>
     <a class="play" href="/play/">Play</a>
+    <a class="desk" href="/desktop/">On a computer? Play the desktop edition</a>
     <ul class="feats">
       <li><svg viewBox="0 0 40 44" aria-hidden="true"><g stroke="#000" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"><path d="M10 7H5c0 6 3 9 6.5 9.5M30 7h5c0 6-3 9-6.5 9.5" fill="none"/><path d="M10 4h20v9c0 7-4.5 11-10 11S10 20 10 13z" fill="#000"/><path d="M17 24h6v6h-6z" fill="#fff"/><path d="M11 31h18v6H11z" fill="#000"/></g></svg><span><b>Three invitationals</b> on three courses. Finish top three to take home a trophy.</span></li>
       <li><svg viewBox="0 0 40 40" aria-hidden="true"><g stroke="#000" stroke-width="2.4" stroke-linecap="round" fill="none"><circle cx="20" cy="22" r="12" fill="#fff"/><path d="M14 17a8 8 0 0 1 6-3"/><path d="M6 36c6-2 22-2 28 0"/></g></svg><span><b>Real ball physics.</b> Curve it, spin it back, punch it under the wind.</span></li>

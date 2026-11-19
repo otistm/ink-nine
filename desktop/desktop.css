@@ -1,0 +1,50 @@
+/* Ink Nine for desktop: a wide, mouse-and-keyboard layout on top of the phone styles.
+   Clubs become a bag down the right edge, tools sit in the corners, and the course gets the middle. */
+html,body{-webkit-user-select:none;user-select:none}
+canvas{cursor:crosshair}
+canvas.grab{cursor:grab}
+canvas.grabbing{cursor:grabbing}
+
+#top{padding:22px 28px 6px}
+.hn{font-size:40px}
+.sub{font-size:15px}
+.pv{font-size:36px}
+
+/* the bag: a column of clubs on the right, numbered for the keyboard */
+#bar{left:auto;right:24px;top:118px;bottom:auto;width:118px;padding:0;background:none}
+#clubs{grid-template-columns:1fr;gap:8px;max-width:none;counter-reset:club}
+.club{position:relative;display:flex;align-items:baseline;justify-content:space-between;padding:10px 12px 9px 30px;font-size:19px;text-align:left}
+.club small{display:inline;margin:0;font-size:11px}
+.club::before{counter-increment:club;content:counter(club);position:absolute;left:10px;top:50%;transform:translateY(-50%);font-family:var(--ui);font-size:11px;font-weight:800;opacity:.55}
+.club.on{transform:translateX(-8px)}
+.club:hover:not(:disabled){transform:translateX(-4px)}
+.club.on:hover{transform:translateX(-8px)}
+#shot{position:fixed;left:0;right:0;bottom:22px;margin:0;font-size:16px;pointer-events:none;text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 6px #fff}
+
+/* tools: strike and wind bottom left, look and pause bottom right */
+#strikeWrap{left:28px;bottom:28px}
+#windWrap{left:33px;bottom:112px}
+#scope{right:28px;bottom:84px}
+#pause{right:33px;bottom:28px}
+#hint{bottom:64px;font-size:15px}
+#title{padding-bottom:140px}
+#title .tn{font-size:min(120px,12vw)}
+#coach{top:120px;max-width:480px}
+
+/* keyboard help, quiet in the bottom-left corner */
+#keys{position:fixed;left:100px;bottom:26px;z-index:4;display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:700;color:var(--soft);pointer-events:none;
+  text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 6px #fff}
+#keys b{font-family:var(--display);font-style:italic;font-weight:900;font-size:14px;color:var(--ink)}
+kbd{display:inline-block;min-width:18px;padding:1px 5px;margin-right:2px;border:1.5px solid var(--ink);border-radius:5px;background:var(--paper);color:var(--ink);font-family:var(--ui);font-size:11px;font-weight:800;text-align:center;line-height:1.3}
+
+/* cards read better a little wider on a big screen */
+#card .panel{max-width:520px}
+
+/* shorter windows: tighten the bag */
+@media (max-height:760px){
+  #bar{top:96px}
+  #clubs{gap:5px}
+  .club{padding:7px 12px 6px 30px;font-size:17px}
+  #keys{display:none}
+}
+@media (max-width:900px){ #keys{display:none} }
