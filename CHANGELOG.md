@@ -4,6 +4,7 @@
 - New 3D prototype at /desktop/3d/: play Meadowbrook hole 3, Long Way Round, in 3D. It is a test page only, linked from nowhere, and keeps its own saves.
 - Same swing, tempo, curve, wind, physics and scoring as the game. The camera sits behind the ball: turn with the arrow keys (hold Shift for fine turns) or right-drag, scroll to zoom, and press Space for the whole hole from above.
 - The ground is the game's own ink drawing of the hole, draped over the real hills. Trees, the flag and the ball are drawn in 3D with ink outlines, and shade becomes pen hatching. The course around the ball is redrawn sharply for every shot, so putting stays crisp.
+- Aerial view: press V or the button above the telescope to play from high above, with the hole running up the screen like the 2D game. The camera frames your ball and where the shot is heading, and follows the ball in the air. Drag back away from where you want the ball to go, in any direction. Press V again to go back behind the ball. The page remembers which view you used last.
 - Uses one outside library, Three.js, loaded from a CDN on this page only. The phone game and desktop edition don't load it.
 
 ## 0.23.0

@@ -6,7 +6,7 @@
 "use strict";
 
 const P3_COURSE = 0, P3_HOLE = 2;
-const C3 = { yaw: 0, zoom: 1, ready: false, pos: new THREE.Vector3(), look: new THREE.Vector3(), lastState: '', yawDrag: null };
+const C3 = { mode: 'behind', span: 60, yaw: 0, zoom: 1, ready: false, pos: new THREE.Vector3(), look: new THREE.Vector3(), lastState: '', yawDrag: null };
 let three = null;
 
 /* ---------- start straight on the hole; no saving, no online, no invitational ---------- */
@@ -40,7 +40,17 @@ showCard = function () {
 /* ---------- aiming: the camera's heading is the aim; the swing drag is read relative to the camera ---------- */
 const pinAngle = () => { const b = S.ball, h = H(); return Math.atan2(h.cup[1] - b.y, h.cup[0] - b.x); };
 { const base = aimAngle; aimAngle = function () { return C3.ready && S.state !== 'intro' ? C3.yaw : base(); }; }
-{ const base = dragInfo; dragInfo = function () { const d = base(); d.ang = d.l > 4 ? d.ang + C3.yaw + Math.PI / 2 : C3.yaw; return d; }; }
+{ const base = dragInfo; dragInfo = function () { const d = base(); if (d.l > 4) { const w = screenDirToWorld(d.ang); d.ang = w != null ? w : d.ang + C3.yaw + Math.PI / 2; } else d.ang = C3.yaw; return d; }; }
+// The swing is read on screen (pull back, the ball goes the other way). To turn that into a direction on the course,
+// take a point a little way from the ball on screen in the shot's direction and find where it sits on the ground.
+const _ray = new THREE.Raycaster(), _plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), _ndc = new THREE.Vector2(), _hit = new THREE.Vector3();
+function screenDirToWorld(sa) {
+  if (!three) return null; const b = S.ball, gz = zgAt(H(), b.x, b.y), p0 = WS3(b.x, b.y); if (p0[0] < -1e3) return null;
+  const sx = p0[0] + Math.cos(sa) * 60, sy = p0[1] + Math.sin(sa) * 60;
+  _plane.constant = -gz; _ndc.set(sx / W * 2 - 1, -(sy / Hh) * 2 + 1); _ray.setFromCamera(_ndc, three.camera);
+  if (!_ray.ray.intersectPlane(_plane, _hit)) return null;
+  return Math.atan2(_hit.z - b.y, _hit.x - b.x);
+}
 { const base = toAim; toAim = function () { C3.yaw = pinAngle(); C3.zoom = 1; base(); sharpenAround(S.ball.x, S.ball.y); }; }
 { const base = startHole; startHole = function (i) { const h = HOLES[i]; C3.yaw = Math.atan2(h.cup[1] - h.tee[1], h.cup[0] - h.tee[0]); C3.zoom = 1; base(i); }; }
 
@@ -203,6 +213,15 @@ function aimCamera(b, h) {
   const back = (putt ? 5 : 12) * z, up = (putt ? 2.6 : 4.2) * z, ahead = putt ? Math.min(12, distToCup() + 1.5) : 30;
   return { pos: V(b.x - f.x * back, gz + up, b.y - f.z * back), look: V(b.x + f.x * ahead, gz, b.y + f.z * ahead) };
 }
+const holeDir = h => Math.atan2(h.cup[1] - h.tee[1], h.cup[0] - h.tee[0]);
+// Aerial: looking down at the course from high up, always turned so the hole runs up the screen.
+function overhead(h, cx, cy, span) { const d = holeDir(h), gz = zgAt(h, cx, cy);
+  return { pos: V(cx - Math.cos(d) * span * .5, gz + span * 1.05, cy - Math.sin(d) * span * .5), look: V(cx, gz, cy) }; }
+function aerialAim(b, h) {
+  const c = CLUBS[S.club], r = c.putter ? Math.max(5, distToCup() * 1.15) : Math.min(reachFor(c, lieNow()), distToCup() * 1.1);
+  const span = Math.max(c.putter ? 10 : 22, r * 1.3) * C3.zoom; C3.span = span;
+  return overhead(h, b.x + Math.cos(C3.yaw) * r * .45, b.y + Math.sin(C3.yaw) * r * .45, span);
+}
 function aerialCamera(h) {
   const bb = three.bb, c = V((bb.x0 + bb.x1) / 2, 0, (bb.y0 + bb.y1) / 2), d = Math.atan2(h.cup[1] - h.tee[1], h.cup[0] - h.tee[0]);
   return { pos: V(c.x - Math.cos(d) * 300 - Math.sin(d) * 120, 260, c.z - Math.sin(d) * 300 + Math.cos(d) * 120), look: c };
@@ -211,10 +230,13 @@ function updateCamera(t, dt) {
   const b = S.ball, h = H(), cam3 = three.camera; let tgt, k = 1 - Math.exp(-dt * 4);
   if (S.state === 'aim' && look.on) { tgt = aerialCamera(h); k = 1 - Math.exp(-dt * 3); }
   else if (S.state === 'intro') {
-    const I = S.intro, u = easeIO(Math.max(0, Math.min(1, (I.t - 1.2) / 2.6))), g = h.green[0], a = aimCamera(b, h);
+    const I = S.intro, u = easeIO(Math.max(0, Math.min(1, (I.t - 1.2) / 2.6))), g = h.green[0], a = C3.mode === 'aerial' ? aerialAim(b, h) : aimCamera(b, h);
     const d = Math.atan2(h.cup[1] - h.tee[1], h.cup[0] - h.tee[0]), gz = zgAt(h, g.x, g.y);
     const from = { pos: V(g.x - Math.cos(d) * 45, gz + 26, g.y - Math.sin(d) * 45), look: V(g.x, gz, g.y) };
     tgt = { pos: from.pos.clone().lerp(a.pos, u), look: from.look.clone().lerp(a.look, u) }; k = 1;
+  }
+  else if ((S.state === 'flight' || S.state === 'ghost') && C3.mode === 'aerial') {
+    tgt = overhead(h, b.x, b.y, Math.max(C3.span, 24)); k = 1 - Math.exp(-dt * 2.5);
   }
   else if (S.state === 'flight' || S.state === 'ghost') {
     const sp = Math.hypot(b.vx, b.vy), f = sp > .5 ? V(b.vx / sp, 0, b.vy / sp) : V(Math.cos(C3.yaw), 0, Math.sin(C3.yaw)), hz = Math.max(0, b.z - zgAt(h, b.x, b.y)), gz = zgAt(h, b.x, b.y);
@@ -222,7 +244,7 @@ function updateCamera(t, dt) {
     tgt = { pos: V(b.x - f.x * back, gz + up, b.y - f.z * back), look: V(b.x + f.x * 6, gz + hz * .9, b.y + f.z * 6) };
     k = 1 - Math.exp(-dt * (b.mode === 'air' ? 2.2 : 3));
   }
-  else if (S.state === 'aim') tgt = aimCamera(b, h);
+  else if (S.state === 'aim') tgt = C3.mode === 'aerial' ? aerialAim(b, h) : aimCamera(b, h);
   else tgt = { pos: C3.pos.clone(), look: C3.look.clone() };
   if (C3.lastState !== S.state && S.state === 'intro') k = 1;
   C3.pos.lerp(tgt.pos, k); C3.look.lerp(tgt.look, k);
@@ -272,5 +294,16 @@ addEventListener('keydown', e => {
     e.preventDefault(); e.stopPropagation(); if (S.state !== 'aim' || drag) return;
     C3.yaw += (k === 'ArrowLeft' || k === 'a' || k === 'A' ? -1 : 1) * (e.shiftKey ? .004 : .025); updHUD(); }
 }, true);
+function setView(m, quiet) {
+  C3.mode = m; try { localStorage.setItem('inknine-view', m); } catch (_) {}
+  $('viewBtn').firstChild.textContent = m === 'aerial' ? 'Behind the ball' : 'Aerial view';
+  $('viewBtn').setAttribute('aria-label', m === 'aerial' ? 'Switch to the view from behind the ball' : 'Switch to the aerial view');
+  $('hint').firstElementChild.textContent = m === 'aerial'
+    ? 'Pick a club, then click and drag back, away from where you want the ball to go. Let go to swing.'
+    : 'Turn with the arrow keys, pick a club, then click and drag straight down. Let go to swing.';
+  if (!quiet) { sfx('tick'); tone(m === 'aerial' ? 780 : 520, .16, 'sine', .07, m === 'aerial' ? 1040 : 390); }
+}
+$('viewBtn').addEventListener('click', () => { audioInit(); if (look.on) exitLook(); setView(C3.mode === 'aerial' ? 'behind' : 'aerial'); $('viewBtn').blur(); });
+addEventListener('keydown', e => { if ((e.key === 'v' || e.key === 'V') && $('card').hidden && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); $('viewBtn').click(); } });
+{ let m = 'behind'; try { m = localStorage.getItem('inknine-view') || 'behind'; } catch (_) {} setView(m === 'aerial' ? 'aerial' : 'behind', true); }
 $('lookhint').firstElementChild.textContent = 'The whole hole from above. Press Space to go back.';
-$('hint').firstElementChild.textContent = 'Turn with the arrow keys, pick a club, then click and drag straight down. Let go to swing.';
