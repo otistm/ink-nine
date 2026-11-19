@@ -8,6 +8,8 @@
 - More ink detail: contour lines show the shape of the ground, trees have leaf clusters and hatched shadows, bunkers have shaded lips, the rough has finer grass, and disc markers sit in the fairway at 100, 150, 200 and 250 yards from the pin.
 - The desktop edition keeps its own saved progress, separate from the phone game. For now its rounds stay on your computer and don't appear on the leaderboard.
 - The front page shows a link to the desktop edition on computers.
+- Desktop menus use the whole screen. The clubhouse puts the title, a sketch of a different hole each day and the pro shop on the left, with the invitationals on the right. The card before each hole shows a drawn plan of the hole beside the twists. Between holes, your score and the leaderboard sit beside the rewards, with the scorecard along the bottom. The pro shop shows clubs in two columns.
+- Desktop wording says click instead of tap, and explains the mouse and keys.
 
 ## 0.22.0
 - Tutorial tips no longer disappear on their own. After the 5-second bar fills, a small X appears in the corner. Tap it to tuck the tip away until you do what it asks, and the next tip appears as before.

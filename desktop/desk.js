@@ -154,37 +154,64 @@ drawTree=function(tr,i,t){
     ctx.globalAlpha=1; }
 };
 
-/* ---------- the hole map: the whole hole in the top-left corner; click it to look there ---------- */
-function mapRect(){ const top=view.top+16, h=Math.min(340,Hh-top-250); return h<130?null:{x:26,y:top,w:150,h}; }
-function mapFit(h,R){ const bb=h._bb||(h._bb=staticBounds(h,10)); return {bb,z:Math.min((R.w-14)/(bb.x1-bb.x0),(R.h-14)/(bb.y1-bb.y0))}; }
-function drawMap(t){
-  const R=mapRect(); if(!R||MOD.fog) return; const h=H(), {bb,z}=mapFit(h,R);
+/* ---------- hole plans: the whole hole drawn small, for the corner map and the menus ----------
+   Draws on the main canvas inside rectangle R by briefly pointing the camera at the hole. rot turns the
+   plan (used in menus so a long hole lies flat), live adds your ball, aim and the current view. */
+function drawPlan(h,R,o={}){
+  const rot=o.rot||0, bb=h._bb||(h._bb=staticBounds(h,10)), cx0=(bb.x0+bb.x1)/2, cy0=(bb.y0+bb.y1)/2, c=Math.cos(rot), s=Math.sin(rot);
+  let ex=0,ey=0; [[bb.x0,bb.y0],[bb.x1,bb.y0],[bb.x0,bb.y1],[bb.x1,bb.y1]].forEach(([x,y])=>{ const dx=x-cx0,dy=y-cy0; ex=Math.max(ex,Math.abs(dx*c-dy*s)); ey=Math.max(ey,Math.abs(dx*s+dy*c)); });
+  const z=Math.min((R.w-14)/(2*ex),(R.h-14)/(2*ey));
   const sc={x:cam.x,y:cam.y,z:cam.z}, sv={cx:view.cx,cy:view.cy}, sk={x:shakeOff.x,y:shakeOff.y};
   ctx.save();
-  ctx.fillStyle='#000'; ctx.beginPath(); ctx.roundRect(R.x+4,R.y+5,R.w,R.h,14); ctx.fill();
+  if(o.frame){ ctx.fillStyle='#000'; ctx.beginPath(); ctx.roundRect(R.x+4,R.y+5,R.w,R.h,14); ctx.fill(); }
   ctx.fillStyle='#fff'; ctx.beginPath(); ctx.roundRect(R.x,R.y,R.w,R.h,14); ctx.fill(); ctx.clip();
-  cam.x=(bb.x0+bb.x1)/2; cam.y=(bb.y0+bb.y1)/2; cam.z=z; view.cx=R.x+R.w/2; view.cy=R.y+R.h/2; shakeOff.x=shakeOff.y=0;
+  cam.x=cx0; cam.y=cy0; cam.z=z; view.cx=R.x+R.w/2; view.cy=R.y+R.h/2; shakeOff.x=shakeOff.y=0;
   try{
-    const [ox,oy]=WS(0,0); [patRough,patSand,patWater,patGreen,patHatch].forEach(p=>setPat(p,ox,oy));
-    ctx.globalAlpha=.6; ctx.fillStyle=patRough; ctx.fillRect(R.x,R.y,R.w,R.h); ctx.globalAlpha=1;
-    layer(h.ob,patHatch,.8); layer(h.fair,'#fff',.8); layer(h.water,patWater,.8); layer(h.green,patGreen,.9); layer(h.sand,patSand,.7);
-    ctx.lineWidth=.8; ctx.strokeStyle='#000';
+    ctx.translate(view.cx,view.cy); ctx.rotate(rot); ctx.translate(-view.cx,-view.cy);
+    const [ox,oy]=WS(0,0); [patRough,patSand,patWater,patGreen,patHatch,patStripe].forEach(p=>setPat(p,ox,oy));
+    const big=Math.max(R.w,R.h); ctx.globalAlpha=.6; ctx.fillStyle=patRough; ctx.fillRect(view.cx-big,view.cy-big,big*2,big*2); ctx.globalAlpha=1;
+    const ink=o.ink||.8;
+    layer(h.ob,patHatch,ink); layer(h.fair,o.stripes?patStripe:'#fff',ink); layer(h.water,patWater,ink); layer(h.green,patGreen,ink+.1); layer(h.sand,patSand,ink*.9);
+    if(o.contours) drawContours(h);
+    ctx.lineWidth=ink; ctx.strokeStyle='#000';
     h.trees.forEach(tr=>{ const [x,y]=WS(tr[0],tr[1]); ctx.beginPath(); ctx.arc(x,y,Math.max(1.2,tr[2]*z),0,TAU); ctx.fillStyle='#fff'; ctx.fill(); ctx.stroke(); });
     { const [x,y]=WS(h.tee[0],h.tee[1]); ctx.fillStyle='#000'; ctx.fillRect(x-3,y-2,6,4); }
-    { const [x,y]=WS(h.cup[0],h.cup[1]); ctx.lineWidth=1.4; ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x,y-13); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(x,y-13); ctx.lineTo(x+8,y-10); ctx.lineTo(x,y-7); ctx.closePath(); ctx.fillStyle='#fff'; ctx.fill(); ctx.stroke(); }
-    const b=S.ball, [bx,by]=WS(b.x,b.y);
-    if(S.state==='aim'){ const c=CLUBS[S.club], ang=drag?dragInfo().ang:aimAngle(), r=drag?dragInfo().power*reachFor(c,lieNow()):Math.min(reachFor(c,lieNow()),c.putter?distToCup():1e9);
-      const [ex,ey]=WS(b.x+Math.cos(ang)*r,b.y+Math.sin(ang)*r); ctx.setLineDash([2,3]); ctx.lineWidth=1.4; ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(ex,ey); ctx.stroke(); ctx.setLineDash([]);
-      ctx.beginPath(); ctx.arc(ex,ey,2.5,0,TAU); ctx.stroke(); }
-    if(look.on){ const [a0,b0]=[sc.x+(0-sv.cx)/sc.z,sc.y+(view.top-sv.cy)/sc.z], [a1,b1]=[sc.x+(W-sv.cx)/sc.z,sc.y+(Hh-view.bot-sv.cy)/sc.z], [p,q]=WS(a0,b0), [u,v]=WS(a1,b1);
-      ctx.setLineDash([4,3]); ctx.lineWidth=1.3; ctx.strokeRect(p,q,u-p,v-q); ctx.setLineDash([]); }
-    ctx.beginPath(); ctx.arc(bx,by,3.6,0,TAU); ctx.fillStyle='#000'; ctx.fill(); ctx.lineWidth=1.5; ctx.strokeStyle='#fff'; ctx.stroke();
+    { const [x,y]=WS(h.cup[0],h.cup[1]); ctx.save(); ctx.translate(x,y); ctx.rotate(-rot); ctx.lineWidth=1.4; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,-13); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,-13); ctx.lineTo(8,-10); ctx.lineTo(0,-7); ctx.closePath(); ctx.fillStyle='#fff'; ctx.fill(); ctx.stroke(); ctx.restore(); }
+    if(o.live){
+      const b=S.ball, [bx,by]=WS(b.x,b.y);
+      if(S.state==='aim'){ const cl=CLUBS[S.club], ang=drag?dragInfo().ang:aimAngle(), r=drag?dragInfo().power*reachFor(cl,lieNow()):Math.min(reachFor(cl,lieNow()),cl.putter?distToCup():1e9);
+        const [qx,qy]=WS(b.x+Math.cos(ang)*r,b.y+Math.sin(ang)*r); ctx.setLineDash([2,3]); ctx.lineWidth=1.4; ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(qx,qy); ctx.stroke(); ctx.setLineDash([]);
+        ctx.beginPath(); ctx.arc(qx,qy,2.5,0,TAU); ctx.stroke(); }
+      if(look.on){ const [a0,b0]=[sc.x+(0-sv.cx)/sc.z,sc.y+(view.top-sv.cy)/sc.z], [a1,b1]=[sc.x+(W-sv.cx)/sc.z,sc.y+(Hh-view.bot-sv.cy)/sc.z], [p,q]=WS(a0,b0), [u,v]=WS(a1,b1);
+        ctx.setLineDash([4,3]); ctx.lineWidth=1.3; ctx.strokeRect(p,q,u-p,v-q); ctx.setLineDash([]); }
+      ctx.beginPath(); ctx.arc(bx,by,3.6,0,TAU); ctx.fillStyle='#000'; ctx.fill(); ctx.lineWidth=1.5; ctx.strokeStyle='#fff'; ctx.stroke();
+    }
   } finally {
     Object.assign(cam,sc); view.cx=sv.cx; view.cy=sv.cy; shakeOff.x=sk.x; shakeOff.y=sk.y;
   }
   ctx.restore();
   ctx.save(); ctx.lineWidth=2.5; ctx.strokeStyle='#000'; ctx.beginPath(); ctx.roundRect(R.x,R.y,R.w,R.h,14); ctx.stroke(); ctx.restore();
+}
+// the angle that turns a hole so it plays left to right
+const flatRot=h=>-Math.atan2(h.cup[1]-h.tee[1],h.cup[0]-h.tee[0]);
+
+/* the corner map during play; click it to look there */
+function mapRect(){ const top=view.top+16, h=Math.min(340,Hh-top-250); return h<130?null:{x:26,y:top,w:150,h}; }
+function mapFit(h,R){ const bb=h._bb||(h._bb=staticBounds(h,10)); return {bb,z:Math.min((R.w-14)/(bb.x1-bb.x0),(R.h-14)/(bb.y1-bb.y0))}; }
+function drawMap(){ const R=mapRect(); if(!R||MOD.fog||!$('card').hidden) return; drawPlan(H(),R,{live:true,frame:true}); }
+
+/* plans inside menu cards: queued by the layout code, drawn just before the next frame, then copied
+   into the card's own little canvas (the frame then paints over the main canvas as usual) */
+const PLAN_Q=[];
+function planInto(el,h){ PLAN_Q.push({el,h}); }
+function flushPlans(){
+  while(PLAN_Q.length){ const {el,h}=PLAN_Q.shift(); if(!el.isConnected) continue;
+    const w=Math.round(el.clientWidth), ht=Math.round(el.clientHeight); if(w<40||ht<40||w>W||ht>Hh) continue;
+    ctx.setTransform(DPR,0,0,DPR,0,0); ctx.clearRect(0,0,w+8,ht+8);
+    drawPlan(h,{x:0,y:0,w,h:ht},{rot:flatRot(h),contours:true,stripes:true,ink:1});
+    el.width=Math.round(w*DPR); el.height=Math.round(ht*DPR);
+    el.getContext('2d').drawImage(cv,0,0,el.width,el.height,0,0,el.width,el.height); }
 }
 function inMap(x,y){ const R=mapRect(); return !!R&&!MOD.fog&&x>=R.x&&x<=R.x+R.w&&y>=R.y&&y<=R.y+R.h; }
 function mapToWorld(x,y){ const R=mapRect(), {bb,z}=mapFit(H(),R); return [(bb.x0+bb.x1)/2+(x-(R.x+R.w/2))/z,(bb.y0+bb.y1)/2+(y-(R.y+R.h/2))/z]; }
@@ -212,7 +239,7 @@ function drawRange(){
   ctx.restore();
 }
 
-{ const base=draw; draw=function(t,dt){ base(t,dt); drawRange(); drawMap(t);
+{ const base=draw; draw=function(t,dt){ flushPlans(); base(t,dt); drawRange(); drawMap();
   const cls=look.on?(look.ptrs.size?'grabbing':'grab'):''; if(cv.className!==cls) cv.className=cls; }; }
 
 /* ---------- mouse: scroll to zoom, right-drag to pan, click the map to look there ---------- */
@@ -244,3 +271,38 @@ document.addEventListener('keydown',e=>{
   if(k==='Escape'&&(!$('windBox').hidden||!$('dial').hidden)){ openWind(false); openDial(false); return; }
   if(k==='p'||k==='P'||(k==='Escape'&&!look.on)){ if(S.state==='aim'&&!drag&&!$('pause').disabled) $('pause').click(); }
 },true);
+
+/* ---------- menus: every card is rearranged for a wide screen as it appears ----------
+   The phone game builds each card as one narrow column. Here each card is sorted into a left column,
+   a right column and a full-width footer, with a drawn plan of the hole where it helps. The buttons
+   keep working because the same elements are only moved, never rebuilt. */
+const WORDS=[[/Shake your finger quickly to cancel/g,'Scrub the mouse quickly back and forth to cancel'],[/drag back anywhere and let go/g,'click and drag back anywhere, then let go'],
+  [/The ball button bottom-left sets/g,'The ball button bottom-left (or the up and down arrow keys) sets'],[/Tap the telescope/g,'Click the telescope (or press Space)'],[/\bTap\b/g,'Click'],[/\btap\b/g,'click']];
+function reword(root){ const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT); let n;
+  while((n=w.nextNode())){ const s=n.nodeValue; let t=s; WORDS.forEach(([a,b])=>{ t=t.replace(a,b); }); if(t!==s) n.nodeValue=t; } }
+const LAYOUTS={ // which pieces go right, which go along the bottom; everything else stays left
+  home:{right:'#tutBtn,.events,.resnote'},
+  hole:{right:'h3,.picks,.kit,.ver'},
+  card:{right:'h3,.picks,#go',foot:'table.sc'},
+  final:{right:'.board',foot:'table.sc,.kit,.btn'}
+};
+function panelKind(p){ const q=s=>p.querySelector(s);
+  return q('.events')?'home':q('#nameForm')?'name':q('.shop')?'shop':q('#homeTw')?'hole':q('#again')?'final':q('.board')?'card':q('#resume')?'pause':q('#fbNote')?'fb':''; }
+function sketchOfTheDay(){ const holes=EVENTS.flatMap(e=>COURSES[e.course].holes.map(h=>({h,course:COURSES[e.course].name}))), d=Math.floor(Date.now()/864e5);
+  return holes[(d*7)%holes.length]; }
+function layoutPanel(){
+  const p=$('panel'); if(p.firstElementChild&&p.firstElementChild.classList.contains('dcol')) return;
+  reword(p);
+  const kind=panelKind(p); p.className='panel'+(kind?' d-'+kind:''); const L=LAYOUTS[kind]; if(!L) return;
+  const left=document.createElement('div'), right=document.createElement('div'), foot=document.createElement('div');
+  left.className='dcol dl'; right.className='dcol dr'; foot.className='dfoot';
+  [...p.children].forEach(el=>{ (L.foot&&el.matches(L.foot)?foot:el.matches(L.right)?right:left).appendChild(el); });
+  p.append(left,right); if(foot.children.length) p.append(foot);
+  if(kind==='hole'){ const m=/Hole (\d+)/.exec(p.querySelector('h2').textContent), h=m&&HOLES[+m[1]-1];
+    if(h){ const c=document.createElement('canvas'); c.className='dplan'; c.setAttribute('aria-label',`Plan of ${h.name}`); const tip=left.querySelector('h2+p'); (tip||left.lastChild).after(c); planInto(c,h); } }
+  if(kind==='home'){ const sk=sketchOfTheDay(), fig=document.createElement('figure'); fig.className='dsketch';
+    fig.innerHTML=`<canvas class="dplan" aria-label="Plan of ${sk.h.name}"></canvas><figcaption>Today's sketch: ${sk.h.name}, ${sk.course}. Par ${sk.h.par}, ${sk.h.len} yards.</figcaption>`;
+    const tag=left.querySelector('.logo+p'); (tag||left.firstChild).after(fig); planInto(fig.querySelector('canvas'),sk.h); }
+}
+new MutationObserver(layoutPanel).observe($('panel'),{childList:true});
+new MutationObserver(()=>reword($('coachT'))).observe($('coachT'),{childList:true,characterData:true,subtree:true});

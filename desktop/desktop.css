@@ -37,8 +37,56 @@ canvas.grabbing{cursor:grabbing}
 #keys b{font-family:var(--display);font-style:italic;font-weight:900;font-size:14px;color:var(--ink)}
 kbd{display:inline-block;min-width:18px;padding:1px 5px;margin-right:2px;border:1.5px solid var(--ink);border-radius:5px;background:var(--paper);color:var(--ink);font-family:var(--ui);font-size:11px;font-weight:800;text-align:center;line-height:1.3}
 
-/* cards read better a little wider on a big screen */
-#card .panel{max-width:520px}
+/* ---------- menus, laid out for a wide screen ---------- */
+#card{padding:36px 32px}
+.panel.d-home,.panel.d-hole,.panel.d-card,.panel.d-final{display:grid;grid-template-columns:1fr 1fr;gap:0 44px;align-items:start;text-align:left;padding:34px 40px 30px}
+.panel.d-home{width:min(1140px,100%);grid-template-columns:minmax(320px,400px) 1fr;gap:0 52px}
+.panel.d-hole,.panel.d-card,.panel.d-final{width:min(1060px,100%)}
+.dcol{min-width:0}
+.dfoot{grid-column:1/-1;margin-top:8px}
+.panel.d-shop{width:min(920px,100%);padding:30px 36px}
+.d-shop .shop{grid-template-columns:1fr 1fr;gap:10px}
+.panel.d-name,.panel.d-pause,.panel.d-fb{width:min(500px,100%);padding:30px 32px 26px}
+.panel h2{font-size:42px}
+.panel p{font-size:15px}
+
+/* clubhouse: the name and a sketch on the left, the invitationals on the right */
+.d-home .logo{font-size:88px !important;line-height:.9;margin:0 0 8px !important}
+.d-home .dl>p:first-of-type{font-size:18px;color:var(--ink)}
+.d-home .events{margin-top:0;gap:14px}
+.d-home .event{padding:16px 18px}
+.d-home .ev b{font-size:26px}
+.d-home .ev span{font-size:14px}
+.d-home .event.tut{margin-bottom:14px}
+.d-home .shopbtn{margin:10px 0 10px}
+.dsketch{margin:4px 0 16px}
+.dsketch .dplan{height:190px}
+.dsketch figcaption{font-size:12px;font-weight:700;color:var(--soft);margin-top:8px}
+
+/* the hole card: the plan of the hole sits under its description */
+.dplan{position:static;inset:auto;display:block;width:100%;height:230px;border-radius:14px;margin:0 0 16px}
+.d-hole .dr h3:first-child,.d-card .dr h3:first-child{margin-top:4px}
+.d-card .board,.d-final .board{margin-bottom:12px}
+.d-card .dr .picks,.d-hole .dr .picks{gap:12px}
+.pick{padding:14px 16px}
+.pick b{font-size:23px}
+.pick span{font-size:14px}
+.d-final .award .troph{width:120px;height:132px}
+.dfoot .btn{width:auto;min-width:260px;margin:0 12px 0 0}
+.dfoot .sc{font-size:14px}
+
+/* everything you can click lifts a little under the mouse */
+.event:not(.locked):hover,.pick:hover,.shopbtn:hover,.srow:not(.locked):hover{transform:translateY(-3px)}
+.btn:hover{transform:translateY(-2px)}
+.event,.pick,.shopbtn,.srow{transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+
+@media (max-width:860px){
+  .panel.d-home,.panel.d-hole,.panel.d-card,.panel.d-final{grid-template-columns:1fr}
+  .d-shop .shop{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion: reduce){
+  .event:not(.locked):hover,.pick:hover,.shopbtn:hover,.srow:not(.locked):hover,.btn:hover{transform:none}
+}
 
 /* shorter windows: tighten the bag */
 @media (max-height:760px){
