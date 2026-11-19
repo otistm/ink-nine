@@ -101,6 +101,7 @@ function paintGround(h, bb, ppy, lw) {
     const L = Math.hypot(w, hgt), bw = width * ppy; for (let x = -L; x < L; x += bw * 2) g.fillRect(x, -L, bw, L * 2); g.restore(); };
   // ink: the outline of a group of shapes, traced just outside their edge (their union, so overlaps don't double up)
   const outline = (main, shapes, dash) => {
+    if (!lw) return;   // dithered mode draws no lines at all
     const c = cnv(g => { g.fillStyle = g.strokeStyle = '#141414'; shapes.forEach(s => shapePath(g, s, lw)); g.globalCompositeOperation = 'destination-out'; shapes.forEach(s => shapePath(g, s, 0));
       if (dash) { g.globalCompositeOperation = 'destination-out'; g.save(); g.translate(w / 2, hgt / 2); g.rotate(.7); const L = Math.hypot(w, hgt), st = dash * ppy; for (let x = -L; x < L; x += st * 2) g.fillRect(x, -L, st, L * 2); g.restore(); } });
     main.drawImage(c, 0, 0);
@@ -164,7 +165,7 @@ void main(){
   float ed = smoothstep(.02, .06, lap);
   vec3 n = nrm(vUv); float nd = max(max(1. - dot(n, nrm(vUv - vec2(p.x, 0.))), 1. - dot(n, nrm(vUv + vec2(p.x, 0.)))), max(1. - dot(n, nrm(vUv + vec2(0., p.y))), 1. - dot(n, nrm(vUv - vec2(0., p.y)))));
   float en = smoothstep(.18, .4, nd);
-  float e = max(ed, en) * (1. - smoothstep(fogNear, fogFar, c));
+  float e = max(ed, en) * (1. - smoothstep(fogNear, fogFar, c)) * (1. - dither);   // dithered mode: no outlines
   vec3 col = texture2D(tColor, vUv).rgb * (1. - e * .92);
   if (dither > .5) {   // 1-bit: every pixel pure black or white, greys become an ordered (Bayer) dot pattern
     float l = dot(col, vec3(.299, .587, .114));
@@ -232,7 +233,7 @@ function build3D(h) {
   sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096); sun.shadow.bias = -.0004; sun.shadow.normalBias = .04;
   scene.add(sun, sun.target, new THREE.AmbientLight(0xffffff, .32)); three.sun = sun;
   // ground
-  const tex = new THREE.CanvasTexture(paintGround(h, bb, Math.min(4, 4096 / Math.max(bb.x1 - bb.x0, bb.y1 - bb.y0)), .34)); tex.anisotropy = aniso;
+  const tex = new THREE.CanvasTexture(paintGround(h, bb, Math.min(4, 4096 / Math.max(bb.x1 - bb.x0, bb.y1 - bb.y0)), C3.dither ? 0 : .34)); tex.anisotropy = aniso; three.groundTex = tex;
   const grain = new THREE.CanvasTexture(noiseTile()); grain.wrapS = grain.wrapT = THREE.RepeatWrapping; grain.anisotropy = aniso;
   three.patchU = { grain: { value: grain, type: 'sampler2D' }, mapD: { value: null, type: 'sampler2D' }, dRect: { value: new THREE.Vector4(), type: 'vec4' }, useD: { value: 0, type: 'float' } };
   const groundMat = worldAware(toon(0xffffff, { map: tex }), `
@@ -311,7 +312,7 @@ function sharpenAround(x, y) {
   if (!three || !three.patchU) return; const h = H(), R = 55;
   const dg = Math.hypot(h.cup[0] - x, h.cup[1] - y), cx = dg < R * 1.4 ? (x + h.cup[0]) / 2 : x, cy = dg < R * 1.4 ? (y + h.cup[1]) / 2 : y;
   const bb = { x0: cx - R, x1: cx + R, y0: cy - R, y1: cy + R }, u = three.patchU;
-  const t = new THREE.CanvasTexture(paintGround(h, bb, 18, .09)); t.anisotropy = three.renderer.capabilities.getMaxAnisotropy();
+  const t = new THREE.CanvasTexture(paintGround(h, bb, 18, C3.dither ? 0 : .09)); t.anisotropy = three.renderer.capabilities.getMaxAnisotropy();
   if (u.mapD.value) u.mapD.value.dispose(); u.mapD.value = t; u.dRect.value.set(bb.x0, bb.y0, bb.x1, bb.y1); u.useD.value = 1;
 }
 { const base = resize; resize = function () { base(); if (three) { three.renderer.setPixelRatio(DPR); three.renderer.setSize(W, Hh, false); three.camera.aspect = W / Hh; three.camera.updateProjectionMatrix(); makeTargets(); } }; }
@@ -475,7 +476,10 @@ $('lookhint').firstElementChild.textContent = 'The whole hole from above. Press 
 // dithering on or off: B or the button; remembered between visits
 function setDither(on, quiet) {
   C3.dither = on; try { localStorage.setItem('inknine-dither', on ? '1' : '0'); } catch (_) {}
-  if (three) three.edge.material.uniforms.dither.value = on ? 1 : 0;
+  if (three) { three.edge.material.uniforms.dither.value = on ? 1 : 0;
+    if (three.groundTex && !quiet) {   // repaint the ground with or without its ink lines
+      const h = H(), bb = three.bb; three.groundTex.image = paintGround(h, bb, Math.min(4, 4096 / Math.max(bb.x1 - bb.x0, bb.y1 - bb.y0)), on ? 0 : .34); three.groundTex.needsUpdate = true;
+      sharpenAround(S.ball.x, S.ball.y); } }
   const b = $('ditherBtn'); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on));
   if (!quiet) { sfx('tick'); tone(on ? 900 : 600, .12, 'square', .04, on ? 450 : 1200); }
 }
