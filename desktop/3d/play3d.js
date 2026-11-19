@@ -6,7 +6,7 @@
 "use strict";
 
 const P3_COURSE = 0, P3_HOLE = 2;
-const C3 = { dither: false, colour: true, mode: 'aerial', span: 60, yaw: 0, zoom: 1, ready: false, pos: new THREE.Vector3(), look: new THREE.Vector3(), lastState: '', yawDrag: null };
+const C3 = { style: 0, mode: 'aerial', span: 60, yaw: 0, zoom: 1, ready: false, pos: new THREE.Vector3(), look: new THREE.Vector3(), lastState: '', yawDrag: null };
 let three = null;
 
 /* ---------- start straight on the hole; no saving, no online, no invitational ---------- */
@@ -209,26 +209,92 @@ const BAYER = (() => { const m = [[0]]; let M = m;
   const d = new Uint8Array(64 * 3); for (let i = 0; i < 64; i++) { const v = Math.round((M[(i / 8) | 0][i % 8] + .5) / 64 * 255); d[i * 3] = d[i * 3 + 1] = d[i * 3 + 2] = v; }
   const t = new THREE.DataTexture(d, 8, 8, THREE.RGBFormat); t.minFilter = t.magFilter = THREE.NearestFilter; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.generateMipmaps = false; t.needsUpdate = true; return t; })();
 const POST_VS = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }';
+// The styles you can flip between with [ and ]. "depth" styles also read how far away each pixel is, to draw outlines.
+const STYLES = [
+  { name: 'Realistic' }, { name: 'Black and white' }, { name: '1-bit dither' },
+  { name: 'Ink and wash', depth: true }, { name: 'Watercolour', depth: true }, { name: 'Engraving', depth: true },
+  { name: 'Risograph', depth: true }, { name: 'Gouache poster', depth: true }, { name: 'Blueprint', depth: true }
+];
 const POST_FS = `
-uniform sampler2D tColor, bayer; uniform float mode, cell, exposure, seed; varying vec2 vUv;
+uniform sampler2D tColor, tDepth, bayer; uniform float style, cell, exposure, cn, cf; uniform vec2 res; varying vec2 vUv;
 vec3 aces(vec3 x){ return clamp((x * (2.51 * x + .03)) / (x * (2.43 * x + .59) + .14), 0., 1.); }
-float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233)) + seed) * 43758.5453); }
+vec3 tone(vec2 uv){ return pow(aces(texture2D(tColor, uv).rgb * exposure), vec3(1. / 2.2)); }
+float luma(vec3 c){ return dot(c, vec3(.2126, .7152, .0722)); }
+float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
+  return mix(mix(h21(i), h21(i + vec2(1., 0.)), f.x), mix(h21(i + vec2(0., 1.)), h21(i + vec2(1., 1.)), f.x), f.y); }
+float fbm(vec2 p){ float a = .5, s = 0.; for (int i = 0; i < 5; i++) { s += a * vnoise(p); p = p * 2.03 + 17.1; a *= .5; } return s; }
+float vz(vec2 uv){ float d = texture2D(tDepth, uv).x; return cn * cf / (cf - d * (cf - cn)); }
+// outlines where depth jumps (the edge of a tree against the ground, a bunker lip)
+float depthEdge(vec2 uv, float w){ vec2 p = w / res; float c = vz(uv);
+  float l = vz(uv - vec2(p.x, 0.)), r = vz(uv + vec2(p.x, 0.)), u = vz(uv + vec2(0., p.y)), d = vz(uv - vec2(0., p.y));
+  return smoothstep(.015, .05, abs(l + r + u + d - 4. * c) / c); }
+// outlines where brightness jumps (fairway against rough, the lake shore)
+float lumEdge(vec2 uv, float w){ vec2 p = w / res;
+  float tl = luma(tone(uv + p * vec2(-1., 1.))), t = luma(tone(uv + p * vec2(0., 1.))), tr = luma(tone(uv + p * vec2(1., 1.)));
+  float l = luma(tone(uv + p * vec2(-1., 0.))), r = luma(tone(uv + p * vec2(1., 0.)));
+  float bl = luma(tone(uv + p * vec2(-1., -1.))), b = luma(tone(uv + p * vec2(0., -1.))), br = luma(tone(uv + p * vec2(1., -1.)));
+  return length(vec2(-tl - 2. * l - bl + tr + 2. * r + br, -bl - 2. * b - br + tl + 2. * t + tr)); }
+float lineM(float a, float t){ return t > .001 ? 1. - step(t, abs(fract(a) - .5)) : 0.; }
+float dots(vec2 sp, float ang, float cs, float amt){ float c = cos(ang), s = sin(ang); vec2 q = mat2(c, -s, s, c) * sp / cs;
+  return 1. - smoothstep(-.06, .06, length(fract(q) - .5) - sqrt(clamp(amt, 0., 1.)) * .56); }
+vec3 rgb2hsv(vec3 c){ vec4 K = vec4(0., -1. / 3., 2. / 3., -1.); vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+  vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r)); float d = q.x - min(q.w, q.y); return vec3(abs(q.z + (q.w - q.y) / (6. * d + 1e-10)), d / (q.x + 1e-10), q.x); }
+vec3 hsv2rgb(vec3 c){ vec3 p = abs(fract(c.xxx + vec3(1., 2. / 3., 1. / 3.)) * 6. - 3.); return c.z * mix(vec3(1.), clamp(p - 1., 0., 1.), c.y); }
 void main(){
-  vec3 c = aces(texture2D(tColor, vUv).rgb * exposure);
-  c = pow(c, vec3(1. / 2.2));
-  vec2 q = vUv - .5; c *= 1. - dot(q, q) * .35;                         // a soft lens vignette
-  if (mode > .5) { float l = dot(c, vec3(.2126, .7152, .0722)); c = vec3(l); }
-  if (mode > 1.5) { float l = clamp((c.r - .5) * 1.25 + .52, 0., 1.); float t = texture2D(bayer, gl_FragCoord.xy / (8. * cell)).r; c = vec3(step(t, l)); }
-  gl_FragColor = vec4(c, 1.);
+  vec2 uv = vUv, sp = gl_FragCoord.xy / (cell * .5);   // sp: screen position in page pixels
+  vec3 col;
+  if (style < 2.5) {                                     // realistic, black and white, 1-bit dither
+    col = tone(uv); vec2 q = uv - .5; col *= 1. - dot(q, q) * .35;
+    if (style > .5) col = vec3(luma(col));
+    if (style > 1.5) { float l = clamp((col.r - .5) * 1.25 + .52, 0., 1.); col = vec3(step(texture2D(bayer, gl_FragCoord.xy / (8. * cell)).r, l)); }
+  } else if (style < 3.5) {                              // ink and wash: stepped grey washes, broken brush outlines, fibrous paper
+    vec2 u2 = uv + (vec2(fbm(uv * 6.), fbm(uv * 6. + 9.)) - .5) * .006;
+    float l = luma(tone(u2)), wash = clamp(mix(floor(l * 4. + (fbm(sp * .02) - .5) * .8) / 4., l, .3), 0., 1.);
+    float e = max(depthEdge(u2, 1.5), smoothstep(.25, .6, lumEdge(u2, 1.))) * (.55 + .45 * smoothstep(.35, .65, fbm(sp * .05)));
+    vec3 paper = vec3(.95, .93, .87) * (.93 + .07 * fbm(sp * vec2(.9, .12))), ink = vec3(.07, .07, .09);
+    col = mix(mix(ink, paper, .12 + .88 * wash), ink, e * .9);
+  } else if (style < 4.5) {                              // watercolour: soft, wobbly, pigment pools at colour edges, white paper shows
+    vec2 u2 = uv + (vec2(fbm(uv * 3.5), fbm(uv * 3.5 + 5.)) - .5) * .016, p = 4. / res;
+    vec3 c = (tone(u2) * 2. + tone(u2 + vec2(p.x, 0.)) + tone(u2 - vec2(p.x, 0.)) + tone(u2 + vec2(0., p.y)) + tone(u2 - vec2(0., p.y))
+            + tone(u2 + p) + tone(u2 - p)) / 8.;                               // colours bleed into each other
+    c = mix(c, floor(c * 4. + fbm(sp * .03)) / 4., .45);                   // washes laid in a few layers
+    c = mix(vec3(luma(c)), c, .8); c = mix(c, vec3(1.), .22);               // thin, light pigment
+    c *= .82 + .36 * fbm(sp * .3);                                          // granulation
+    float pool = smoothstep(.04, .22, lumEdge(u2, 3.)) + depthEdge(u2, 2.); c *= 1. - clamp(pool, 0., 1.) * .45;   // pigment pools at the edges
+    c = mix(c, vec3(1.), smoothstep(.68, .9, luma(c)) * .85);               // white paper left showing in the highlights
+    col = c * vec3(.99, .97, .92) * (.9 + .1 * fbm(sp * .8));
+  } else if (style < 5.5) {                              // engraving: crosshatched lines that swell with the shade
+    float l = clamp((luma(tone(uv)) - .5) * 1.25 + .72, 0., 1.);
+    float ink = max(max(lineM((sp.x + sp.y) / 5. + l * 2., clamp((.9 - l) * .9, 0., .5) * .9), lineM((sp.x - sp.y) / 5., clamp((.6 - l) * 1.1, 0., .5) * .9)), lineM(sp.y / 4., clamp((.3 - l) * 1.4, 0., .5) * .9));
+    float e = max(depthEdge(uv, 1.), smoothstep(.3, .6, lumEdge(uv, 1.)));
+    col = mix(vec3(.96, .93, .84), vec3(.12, .09, .07), max(ink, e));
+  } else if (style < 6.5) {                              // risograph: two inks in halftone dots, slightly out of register
+    vec3 c = tone(uv), c2 = tone(uv + vec2(2.5, -1.5) / res);
+    float l = luma(c), l2 = luma(c2), aB = clamp((.86 - l) * 1.35, 0., 1.), aP = clamp((.66 - l2) * 1.7, 0., 1.) * .9 + clamp(c2.b - c2.g, 0., 1.) * .6;
+    col = vec3(.98, .96, .92) * mix(vec3(1.), vec3(.12, .36, .78), dots(sp, .26, 5., aB)) * mix(vec3(1.), vec3(1., .36, .58), dots(sp + vec2(1.3, .7), 1.31, 5., aP * .9));
+    col *= .95 + .05 * h21(floor(sp));
+  } else if (style < 7.5) {                              // gouache poster: flat bands of simplified colour, soft outlines, brushy texture
+    vec2 u2 = uv + (vec2(fbm(uv * vec2(3., 30.)), fbm(uv * vec2(30., 3.) + 4.)) - .5) * .004;
+    vec3 h = rgb2hsv(tone(u2)); h.x = floor(h.x * 18. + .5) / 18.; h.y = clamp(h.y * 1.2, 0., 1.); h.z = floor(h.z * 5. + .5) / 5. * .9 + h.z * .1;
+    vec3 c = hsv2rgb(h); c = mix(c, c * .35, depthEdge(u2, 1.5) * .8);
+    col = c * (.94 + .06 * fbm(sp * vec2(.5, .08)));
+  } else {                                               // blueprint: white line drawing on blue, with a drafting grid
+    float e = max(depthEdge(uv, 1.), smoothstep(.15, .45, lumEdge(uv, 1.)));
+    vec2 g = abs(fract(sp / 40.) - .5); float grid = max(step(.485, g.x), step(.485, g.y)) * .18;
+    col = vec3(.06, .2, .42) + vec3(.85, .92, 1.) * (e * .95 + grid + luma(tone(uv)) * .08);
+  }
+  gl_FragColor = vec4(col, 1.);
 }`;
 function makeTargets() {
   const w = Math.round(W * DPR), hh = Math.round(Hh * DPR), opts = { type: THREE.HalfFloatType };
-  if (three.rt) three.rt.dispose();
+  if (three.rt) three.rt.dispose(); if (three.rtD) three.rtD.dispose();
+  // smooth-edged target for the photographic styles; a target that also keeps depth for the outline styles
   three.rt = three.renderer.capabilities.isWebGL2 && THREE.WebGLMultisampleRenderTarget ? new THREE.WebGLMultisampleRenderTarget(w, hh, opts) : new THREE.WebGLRenderTarget(w, hh, opts);
   if (three.rt.samples !== undefined) three.rt.samples = 4;
-  const u = three.post.material.uniforms; u.tColor.value = three.rt.texture; u.cell.value = 2 * DPR;
+  three.rtD = new THREE.WebGLRenderTarget(w, hh, opts); three.rtD.depthTexture = new THREE.DepthTexture(w, hh); three.rtD.depthTexture.type = THREE.UnsignedIntType;
+  const u = three.post.material.uniforms; u.cell.value = 2 * DPR; u.res.value.set(w, hh); u.tDepth.value = three.rtD.depthTexture;
 }
-const styleMode = () => C3.dither ? 2 : C3.colour ? 0 : 1;
 
 /* ---------- the sky: a real golf course HDR photo lights the scene; the sun is found in it ---------- */
 function halfToFloat(h) { const s = (h & 0x8000) ? -1 : 1, e = (h >> 10) & 31, f = h & 1023; return e === 0 ? s * Math.pow(2, -14) * f / 1024 : e === 31 ? (f ? NaN : s * Infinity) : s * Math.pow(2, e - 15) * (1 + f / 1024); }
@@ -262,7 +328,7 @@ function build3D(h) {
     renderer.setPixelRatio(DPR); renderer.setSize(W, Hh, false);
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.shadowMap.autoUpdate = false;
     const post = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ vertexShader: POST_VS, fragmentShader: POST_FS, depthTest: false, depthWrite: false,
-      uniforms: { tColor: { value: null }, bayer: { value: BAYER }, mode: { value: styleMode() }, cell: { value: 2 * DPR }, exposure: { value: .82 }, seed: { value: 0 } } }));
+      uniforms: { tColor: { value: null }, tDepth: { value: null }, bayer: { value: BAYER }, style: { value: C3.style }, cell: { value: 2 * DPR }, exposure: { value: .82 }, res: { value: new THREE.Vector2() }, cn: { value: .05 }, cf: { value: 12000 } } }));
     const postScene = new THREE.Scene(); postScene.add(post);
     three = { renderer, camera: new THREE.PerspectiveCamera(48, W / Hh, .05, 12000), post, postScene, postCam: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1),
       sunDir: new THREE.Vector3(-.55, .44, .7).normalize(), haze: new THREE.Color(.75, .8, .85) };
@@ -514,7 +580,6 @@ function animateWorld(t, dt, h) {
   const look = C3.look, span = Math.max(50, Math.min(380, T.camera.position.distanceTo(look) * 1.2)), sc = T.sun.shadow.camera;
   T.sun.target.position.copy(look); T.sun.position.copy(look).addScaledVector(T.sunDir, 500);
   if (sc.right !== span) { sc.left = -span; sc.right = span; sc.top = span; sc.bottom = -span; sc.near = 1; sc.far = 1200; sc.updateProjectionMatrix(); }
-  T.post.material.uniforms.seed.value = (t * 13.37) % 100;
 }
 
 /* ---------- each frame: the scene into a high-range buffer, the final photographic pass, then the game's 2D overlays ---------- */
@@ -524,7 +589,8 @@ draw = function (t, dt) {
   updateCamera(t, dt); animateBall(t, dt, h); animateWorld(t, dt, h);
   T.grass.visible = T.camera.position.y - groundY(h, b.x, b.y) < 45;   // blades are invisible fuzz from high up
   r.shadowMap.needsUpdate = true;
-  r.setRenderTarget(T.rt); r.render(T.scene, T.camera);
+  const target = STYLES[C3.style].depth ? T.rtD : T.rt; T.post.material.uniforms.tColor.value = target.texture;
+  r.setRenderTarget(target); r.render(T.scene, T.camera);
   r.setRenderTarget(null); r.render(T.postScene, T.postCam);
   // overlays
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.clearRect(0, 0, W, Hh); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -569,20 +635,16 @@ $('viewBtn').addEventListener('click', () => { audioInit(); if (look.on) exitLoo
 addEventListener('keydown', e => { if ((e.key === 'v' || e.key === 'V') && $('card').hidden && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); $('viewBtn').click(); } });
 { let m = 'aerial'; try { m = localStorage.getItem('inknine-view2') || 'aerial'; } catch (_) {} setView(m === 'behind' ? 'behind' : 'aerial', true); }   // aerial unless you chose otherwise
 $('lookhint').firstElementChild.textContent = 'The whole hole from above. Press Space to go back.';
-// dithering on or off (B or the button), colour or black and white (C); both remembered between visits
-function setDither(on, quiet) {
-  C3.dither = on; try { localStorage.setItem('inknine-dither2', on ? '1' : '0'); } catch (_) {}
-  if (three) three.post.material.uniforms.mode.value = styleMode();
-  const b = $('ditherBtn'); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on));
-  if (!quiet) { sfx('tick'); tone(on ? 900 : 600, .12, 'square', .04, on ? 450 : 1200); }
+// styles: the arrows on screen or [ and ] step through them; remembered between visits
+function setStyle(i, quiet) {
+  C3.style = (i + STYLES.length) % STYLES.length; try { localStorage.setItem('inknine-style', String(C3.style)); } catch (_) {}
+  if (three) three.post.material.uniforms.style.value = C3.style;
+  $('styName').textContent = STYLES[C3.style].name; $('stylePick').setAttribute('aria-label', `Style: ${STYLES[C3.style].name}`);
+  if (!quiet) { sfx('tick'); tone(500 + C3.style * 60, .12, 'sine', .06); callout(STYLES[C3.style].name, `Style ${C3.style + 1} of ${STYLES.length}`); }
 }
-function setColour(on, quiet) {
-  C3.colour = on; try { localStorage.setItem('inknine-colour2', on ? '1' : '0'); } catch (_) {}
-  if (three) three.post.material.uniforms.mode.value = styleMode();
-  if (!quiet) { sfx('tick'); tone(on ? 660 : 440, .14, 'sine', .06, on ? 990 : 330); }
-}
-$('ditherBtn').addEventListener('click', () => { audioInit(); setDither(!C3.dither); $('ditherBtn').blur(); });
+$('styPrev').addEventListener('click', () => { audioInit(); setStyle(C3.style - 1); $('styPrev').blur(); });
+$('styNext').addEventListener('click', () => { audioInit(); setStyle(C3.style + 1); $('styNext').blur(); });
 addEventListener('keydown', e => { if (!$('card').hidden || e.ctrlKey || e.metaKey || e.altKey) return;
-  if (e.key === 'b' || e.key === 'B') { e.preventDefault(); $('ditherBtn').click(); }
-  if (e.key === 'c' || e.key === 'C') { e.preventDefault(); audioInit(); setColour(!C3.colour); } });
-{ let on = false, col = true; try { on = localStorage.getItem('inknine-dither2') === '1'; col = localStorage.getItem('inknine-colour2') !== '0'; } catch (_) {} C3.colour = col; setDither(on, true); }   // colour unless you chose black and white
+  if (e.key === '[') { e.preventDefault(); $('styPrev').click(); }
+  if (e.key === ']') { e.preventDefault(); $('styNext').click(); } });
+{ let i = 0; try { i = parseInt(localStorage.getItem('inknine-style') || '0', 10) || 0; } catch (_) {} setStyle(Math.max(0, Math.min(STYLES.length - 1, i)), true); }
