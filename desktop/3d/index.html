@@ -46,6 +46,21 @@
 #shot .credit{color:#b3241c;font-weight:800}
 .club.off em.gc{text-decoration:none}
 #bitPanel[hidden]{display:none}
+.pshop{display:grid;gap:10px;margin-bottom:10px;text-align:left}
+.pslot{border:2px solid var(--ink);border-radius:14px;padding:10px 12px;animation:rowIn .45s cubic-bezier(.3,.7,.3,1) both}
+.pslot.flash{animation:bought .55s cubic-bezier(.3,.7,.3,1)}
+.pslot .ph{display:grid;grid-template-columns:44px 1fr auto;gap:10px;align-items:center}
+.pslot .ph b{display:block;font-family:var(--display);font-weight:900;font-size:17px}.pslot .ph small{display:block;font-size:12px;font-weight:700;color:var(--soft)}
+.pslot .sid{display:grid;place-items:center;width:40px;height:40px;border:2px solid var(--ink);border-radius:10px;font-family:var(--display);font-weight:900}
+.pms{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:8px}
+.pm{border:1.5px dashed var(--ink);border-radius:12px;padding:8px 10px;display:grid;gap:3px;align-content:start}
+.pm.on{border-style:solid;background:#f6f1df}
+.pm b{font-weight:800;font-size:13.5px}.pm small{font-size:12px;font-weight:600;color:var(--soft);line-height:1.35}.pm .pp{color:var(--ink);font-weight:800}
+.pm .tag{justify-self:start;font:800 11px var(--ui);background:var(--ink);color:var(--paper);border-radius:999px;padding:3px 9px;margin-top:4px}
+.pbtn{appearance:none;justify-self:start;border:2px solid var(--ink);border-radius:999px;background:var(--paper);color:var(--ink);font:800 12px var(--ui);padding:5px 11px;cursor:pointer;margin-top:4px}
+.pbtn.buy{background:#f0c23b}.pbtn.up{margin:0}.pbtn[aria-disabled=true]{opacity:.45}
+.pbtn.nope{animation:nope .3s}
+#shot .model{color:var(--ink);font-weight:900}
 #bitPanel{position:fixed;left:28px;top:128px;z-index:6;width:224px;display:grid;gap:4px;border:2.5px solid var(--ink);border-radius:16px;background:var(--paper);box-shadow:3px 4px 0 var(--ink);padding:10px 14px 8px;font:700 12.5px var(--ui)}
 #bitPanel b{font-family:var(--display);font-style:italic;font-weight:900;font-size:16px}
 #bitPanel label{display:flex;justify-content:space-between;margin-top:4px}#bitPanel label span{color:var(--soft)}#bitPanel .lab{margin-top:6px}

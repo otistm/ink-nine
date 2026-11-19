@@ -601,7 +601,7 @@ $('bitReset').addEventListener('click', () => { Object.assign(BIT, { px: 2, pal:
 const CLUB_GOLD = { DR: 4, '3W': 3, '5I': 3, '7I': 2, '9I': 2, PW: 1, SW: 2, PT: 1 };
 const GOLD_START = 10, UPGRADE_GOLD = [6, 10, 15, 22, 30];
 const stipend = () => H().par + 2;                 // a par 5 hands you 7 gold to start
-const clubGold = i => CLUB_GOLD[CLUBS[i].id] || 0;
+const clubGold = i => (CLUB_GOLD[CLUBS[i].id] || 0) + (modelOf(CLUBS[i]).extra || 0);
 if (typeof meta.gold !== 'number' || !meta.goldV2) { meta.gold = GOLD_START; meta.goldV2 = true; saveMeta(); }   // the new, tighter economy starts everyone fresh
 C3.holeGold = 0;
 
@@ -653,24 +653,82 @@ function earn(n, why) {
 }; }
 { const base = toAim; toAim = function () { base(); refreshAfford(); }; }
 
-// the end-of-hole card: what you earned, and a caddie's shop of permanent club upgrades
+/* ---------- the pro shop: better club models to buy and carry, plus upgrades for whatever is in each slot ----------
+   Each slot in the bag (driver, 3 wood, ...) has a standard club and one or two better models with their own
+   character. Buying a model is permanent; you then choose which one to carry. Better models usually cost a gold
+   more per shot, so they're a choice, not just a straight upgrade. Upgrades (Tuned, Forged, ...) apply to the slot. */
+const MODELS = {
+  DR: [{ id: 'std', name: 'Standard driver' },
+       { id: 'long', name: 'Long Tom', desc: '7% more carry, but 25% wilder.', buy: 18, extra: 1, carry: 1.07, disp: 1.25 },
+       { id: 'finder', name: 'Fairway Finder', desc: 'Nearly twice as straight, 3% shorter.', buy: 16, extra: 1, carry: .97, disp: .55 }],
+  '3W': [{ id: 'std', name: 'Standard 3 wood' },
+       { id: 'tour', name: 'Tour Spoon', desc: '5% more carry and 20% straighter.', buy: 14, extra: 1, carry: 1.05, disp: .8 }],
+  '5I': [{ id: 'std', name: 'Standard 5 iron' },
+       { id: 'hybrid', name: 'Rescue Hybrid', desc: 'A touch longer, 25% straighter, lands softer. Same price per shot.', buy: 12, extra: 0, carry: 1.04, disp: .75, loft: 3 }],
+  '7I': [{ id: 'std', name: 'Standard 7 iron' },
+       { id: 'forged', name: 'Forged 7 iron', desc: '30% straighter with 25% more spin range.', buy: 10, extra: 1, disp: .7, spin: 1.25 }],
+  '9I': [{ id: 'std', name: 'Standard 9 iron' },
+       { id: 'forged', name: 'Forged 9 iron', desc: '30% straighter with 25% more spin range.', buy: 10, extra: 1, disp: .7, spin: 1.25 }],
+  PW: [{ id: 'std', name: 'Standard pitching wedge' },
+       { id: 'spin', name: 'Spin Wedge', desc: 'Grabs the green: 40% more spin range and it stops quicker.', buy: 10, extra: 1, spin: 1.4, check: .2 }],
+  SW: [{ id: 'std', name: 'Standard sand wedge' },
+       { id: 'lob', name: 'Lob Wedge', desc: 'Sky-high and soft over trouble: much more loft, a little shorter. Same price per shot.', buy: 10, extra: 0, loft: 7, spin: 1.3, carry: .92 }],
+  PT: [{ id: 'std', name: 'Standard putter' },
+       { id: 'mallet', name: 'Mallet Putter', desc: 'A friendlier cup: putts drop from a little further off line.', buy: 12, extra: 1, cap: .25 }]
+};
+function modelOf(c) { const list = MODELS[c.id] || [{ id: 'std', name: c.name }], want = (meta.equip || {})[c.id]; return list.find(m => m.id === want) || list[0]; }
+const ownsModel = (c, id) => id === 'std' || ((meta.models || {})[c.id] || []).includes(id);
+// the equipped model shapes the club's numbers everywhere: aim preview, flight, spin dial, the cup
+{ const base = CS; CS = function (c) { const r = base(c), m = modelOf(c); if (!m || m.id === 'std') return r;
+  return Object.assign({}, r, { carry: r.carry * (m.carry || 1), disp: r.disp * (m.disp || 1), spin: r.spin * (m.spin || 1), capV: (r.capV || 0) + (m.cap || 0) }); }; }
+{ const base = strikeParams; strikeParams = function (c, sv, lie, q, LS) { const p = base(c, sv, lie, q, LS), m = modelOf(c);
+  if (m && m.loft) p.loft += m.loft; if (m && m.check) p.check = Math.min(.95, p.check + m.check); return p; }; }
+// the model in hand shows on the shot line
+{ const base = updHUD; updHUD = function () { base(); const m = modelOf(CLUBS[S.club]);
+  if (m.id !== 'std' && (S.state === 'aim' || S.state === 'intro') && $('shot')) $('shot').insertAdjacentHTML('afterbegin', `<b class="model">${m.name}</b> · `); }; }
+
+function showProShop(back, flash) {
+  const rows = CLUBS.map((c, i) => {
+    const lv = lvOf(c), max = lv >= UPGRADE_GOLD.length, up = UPGRADE_GOLD[lv], cur = modelOf(c);
+    const models = (MODELS[c.id] || []).map(m => {
+      const own = ownsModel(c, m.id), on = cur.id === m.id, price = (CLUB_GOLD[c.id] || 0) + (m.extra || 0);
+      return `<div class="pm${on ? ' on' : ''}"><b>${m.name}</b><small>${m.desc || 'The club you started with.'}</small><small class="pp">${price} gold a shot</small>
+        ${on ? '<span class="tag">In the bag</span>' : own ? `<button class="pbtn" data-eq="${c.id}:${m.id}">Carry this</button>` : `<button class="pbtn buy" data-buy="${c.id}:${m.id}" ${meta.gold >= m.buy ? '' : 'aria-disabled="true"'}>Buy · ${m.buy} gold</button>`}</div>`;
+    }).join('');
+    return `<div class="pslot${flash === c.id ? ' flash' : ''}"><div class="ph"><span class="sid">${c.id}</span><span><b>${cur.name}</b><small>${Math.round(CS(c).carry)} yds${c.putter ? ' of roll' : ' carry'} · ${LEVEL_NAMES[lv]} ${pips(lv)}</small></span>
+      ${max ? '<span class="smax">Maxed</span>' : `<button class="pbtn up" data-up="${i}" ${meta.gold >= up ? '' : 'aria-disabled="true"'}>Upgrade to ${LEVEL_NAMES[lv + 1]} · ${up} gold</button>`}</div>
+      <div class="pms">${models}</div></div>`;
+  }).join('');
+  $('panel').innerHTML = `<h2>Pro shop</h2><p>Buy better clubs and choose which ones to carry. Better models usually cost a gold more per shot. Upgrades stay with the slot, whichever model is in it.</p>
+    <div class="wallet"><small>Gold to spend</small><b id="wv">${meta.gold} gold</b></div>
+    <div class="shop pshop">${rows}</div><p class="perk" id="pmsg"></p>
+    <button class="btn" id="psBack">Back</button>`;
+  $('card').hidden = false; $('card').classList.remove('home'); if (!flash) $('card').scrollTop = 0;
+  const redo = id => { const y = $('card').scrollTop; showProShop(back, id); $('card').scrollTop = y; showGold(0); refreshChips(); };
+  const deny = (b, msg) => { b.classList.remove('nope'); void b.offsetWidth; b.classList.add('nope'); tone(160, .12, 'triangle', .1); $('pmsg').textContent = msg; };
+  $('psBack').addEventListener('click', () => { sfx('tick'); back(); });
+  [...$('panel').querySelectorAll('[data-buy]')].forEach(b => b.addEventListener('click', () => { audioInit(); const [cid, mid] = b.dataset.buy.split(':'), m = MODELS[cid].find(x => x.id === mid);
+    if (meta.gold < m.buy) return deny(b, `You need ${m.buy - meta.gold} more gold for the ${m.name}.`);
+    meta.gold -= m.buy; meta.models = meta.models || {}; (meta.models[cid] = meta.models[cid] || []).push(mid); meta.equip = meta.equip || {}; meta.equip[cid] = mid; saveMeta();
+    blips(4); setTimeout(() => tone(880, .25, 'triangle', .12), 260); redo(cid); $('pmsg').textContent = `The ${m.name} is in your bag.`; }));
+  [...$('panel').querySelectorAll('[data-eq]')].forEach(b => b.addEventListener('click', () => { const [cid, mid] = b.dataset.eq.split(':'); meta.equip = meta.equip || {}; meta.equip[cid] = mid; saveMeta(); sfx('tick'); redo(cid); }));
+  [...$('panel').querySelectorAll('[data-up]')].forEach(b => b.addEventListener('click', () => { audioInit(); const c = CLUBS[+b.dataset.up], lv = lvOf(c), cost = UPGRADE_GOLD[lv];
+    if (meta.gold < cost) return deny(b, `You need ${cost - meta.gold} more gold for that upgrade.`);
+    meta.gold -= cost; meta.lv[c.id] = lv + 1; saveMeta(); blips(4); redo(c.id); $('pmsg').textContent = `${modelOf(c).name} is now ${LEVEL_NAMES[lv + 1]}. ${CLUB_PERK[c.id]}`; }));
+}
+
+// the end-of-hole card: score, the gold story of the hole, and the way into the pro shop
 showCard = function () {
   const h = H(), s = S.scores[S.hole], L = S.holeLog[S.hole] || { total: 0 };
-  const rows = CLUBS.map((c, i) => { const lv = lvOf(c), max = lv >= UPGRADE_GOLD.length, cost = UPGRADE_GOLD[lv], can = !max && meta.gold >= cost;
-    return `<div class="srow"><div class="sid">${c.id}</div><div class="sinfo"><b>${c.name}</b><span class="slv">${LEVEL_NAMES[lv]} ${pips(lv)}</span><small>${statLine(c, lv)}</small><small>${clubGold(i)} gold a shot</small></div>
-      ${max ? '<span class="smax">Maxed</span>' : `<button class="sbuy" data-i="${i}" ${can ? '' : 'aria-disabled="true"'}><small>${LEVEL_NAMES[lv + 1]}</small>${cost} gold</button>`}</div>`; }).join('');
   $('panel').innerHTML = `<p class="evn">3D prototype, Meadowbrook hole ${S.hole + 1}</p><h2>${scoreName(s - h.par, s)}</h2>
     <p>${h.name} in ${s}, par ${h.par}. ${L.total ? L.total.toLocaleString() + ' points.' : ''}</p>
-    <div class="wallet"><small>${C3.holeGold >= 0 ? `+${C3.holeGold}` : `−${-C3.holeGold}`} gold on this hole (stipend, earnings and shots)</small><b id="wv">${meta.gold} gold</b></div>
-    <h3>Caddie's shop</h3><p class="perk">Upgrades are permanent: more carry, straighter, more spin. Prices per shot stay the same.</p>
-    <div class="shop">${rows}</div>
+    <div class="wallet"><small>${C3.holeGold >= 0 ? `+${C3.holeGold}` : `−${-C3.holeGold}`} gold on this hole (starting gold, earnings and shots)</small><b id="wv">${meta.gold} gold</b></div>
+    <button class="shopbtn" id="toPro"><span class="bag">${shopBagSVG()}</span><span><b>Pro shop</b><small>Better clubs and upgrades · ${meta.gold} gold to spend</small></span></button>
     <button class="btn" id="again3">Play it again (+${stipend()} gold)</button>
     <p class="ver"><a class="linkbtn" href="/desktop/">Back to the desktop edition</a> · <button class="linkbtn" id="fb3">Send feedback</button></p>`;
   $('card').hidden = false; $('card').classList.remove('home');
+  $('toPro').addEventListener('click', () => { audioInit(); sfx('tick'); showProShop(showCard); });
   $('again3').addEventListener('click', () => { sfx('tick'); start3D(); });
   $('fb3').addEventListener('click', () => { sfx('tick'); showFeedback(showCard); });
-  [...$('panel').querySelectorAll('.sbuy')].forEach(b => b.addEventListener('click', () => { audioInit(); const c = CLUBS[+b.dataset.i], lv = lvOf(c), cost = UPGRADE_GOLD[lv];
-    if (meta.gold < cost) { b.classList.remove('nope'); void b.offsetWidth; b.classList.add('nope'); tone(160, .12, 'triangle', .1); return; }
-    meta.gold -= cost; meta.lv[c.id] = lv + 1; saveMeta(); blips(4); const y = $('card').scrollTop; showCard(); $('card').scrollTop = y; showGold(-cost); refreshChips(); }));
 };
 showGold(0);
