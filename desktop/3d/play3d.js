@@ -263,7 +263,6 @@ void main(){
   vec2 q = vUv - .5; c *= 1. - dot(q, q) * .35;                         // a soft lens vignette
   if (mode > .5) { float l = dot(c, vec3(.2126, .7152, .0722)); c = vec3(l); }
   if (mode > 1.5) { float l = clamp((c.r - .5) * 1.25 + .52, 0., 1.); float t = texture2D(bayer, gl_FragCoord.xy / (8. * cell)).r; c = vec3(step(t, l)); }
-  else c += (hash(gl_FragCoord.xy) - .5) * .025;                         // fine film grain
   gl_FragColor = vec4(c, 1.);
 }`;
 function makeTargets() {
@@ -296,7 +295,7 @@ function loadSky() {
 function applySky() {
   const T = three; if (!T || !T.scene || !T.envMap) return;
   T.scene.environment = T.envMap; T.scene.background = T.sky;
-  const m = Math.max(T.haze.r, T.haze.g, T.haze.b) || 1; T.scene.fog = new THREE.FogExp2(T.haze.clone().multiplyScalar(.9 / m), .0011);
+  const m = Math.max(T.haze.r, T.haze.g, T.haze.b) || 1; T.scene.fog = new THREE.Fog(T.haze.clone().multiplyScalar(.9 / m), 1400, 6000);   // only the far horizon fades; the course stays clear
 }
 
 /* ---------- building the scene. Three.js axes: X = game x, Y = height, Z = game y ---------- */
@@ -315,7 +314,7 @@ function build3D(h) {
     const an = renderer.capabilities.getMaxAnisotropy(); Object.values(TEX).forEach(t => { t.anisotropy = an; });
   }
   const T = three, scene = new THREE.Scene(); T.scene = scene; T.hole = h;
-  scene.background = new THREE.Color(.82, .86, .9); scene.fog = new THREE.FogExp2(0xd4dbe2, .0011);
+  scene.background = new THREE.Color(.82, .86, .9); scene.fog = new THREE.Fog(0xd4dbe2, 1400, 6000);
   const bb = staticBounds(h, 110); T.bb = bb;
   // light: the sun (direction found in the sky photo when it loads) and a soft sky fill until the photo arrives
   const sun = new THREE.DirectionalLight(0xfff3e0, 2.1); sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096); sun.shadow.bias = -.00025; sun.shadow.normalBias = .03; sun.shadow.radius = 2.5;
